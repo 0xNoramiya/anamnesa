@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Masthead } from "@/components/Masthead";
 import { QueryInput } from "@/components/QueryInput";
 import { AnswerPanel } from "@/components/AnswerPanel";
@@ -8,6 +8,7 @@ import { TraceSidebar } from "@/components/TraceSidebar";
 import { PdfViewer } from "@/components/PdfViewer";
 import { FastSearch } from "@/components/FastSearch";
 import { useQueryStream } from "@/lib/useQueryStream";
+import type { TraceEvent } from "@/lib/types";
 
 type Mode = "fast" | "agentic";
 interface PdfOpen { docId: string; page: number }
@@ -67,7 +68,7 @@ export default function HomePage() {
               )}
 
               {stream.status === "streaming" && !stream.final && (
-                <ThinkingIndicator eventsCount={stream.events.length} />
+                <ThinkingIndicator events={stream.events} />
               )}
             </section>
 
@@ -152,28 +153,111 @@ function FastSearchHint() {
   );
 }
 
-function ThinkingIndicator({ eventsCount }: { eventsCount: number }) {
+const PHASE_ORDER: TraceEvent["agent"][] = [
+  "orchestrator",
+  "normalizer",
+  "retriever",
+  "drafter",
+  "verifier",
+];
+
+const PHASE_LABELS: Record<TraceEvent["agent"], string> = {
+  orchestrator: "Memulai",
+  normalizer: "Normalisasi kueri",
+  retriever: "Mencari di pedoman",
+  drafter: "Menyusun jawaban",
+  verifier: "Memverifikasi kutipan",
+};
+
+function formatElapsed(ms: number): string {
+  const s = Math.floor(ms / 1000);
+  const mm = Math.floor(s / 60);
+  const ss = s % 60;
+  return `${mm}:${ss.toString().padStart(2, "0")}`;
+}
+
+function ThinkingIndicator({ events }: { events: TraceEvent[] }) {
+  const [startedAt] = useState(() => Date.now());
+  const [now, setNow] = useState(() => Date.now());
+
+  useEffect(() => {
+    const t = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(t);
+  }, []);
+
+  const latest = events.length > 0 ? events[events.length - 1] : null;
+  const currentAgent: TraceEvent["agent"] = latest?.agent ?? "orchestrator";
+  const agentsSeen = new Set(events.map((e) => e.agent));
+  // The retriever often runs silently inside the drafter tool-use loop;
+  // treat "drafter active" as implicit confirmation retrieval happened.
+  if (agentsSeen.has("drafter")) agentsSeen.add("retriever");
+
+  const elapsedMs = now - startedAt;
+  const elapsed = formatElapsed(elapsedMs);
+  // Soft progress sense: map elapsed seconds to a percentage that creeps
+  // toward 95% around the 4-minute mark but never reaches 100 — actual
+  // completion is signalled by the status transition, not this bar.
+  const pct = Math.min(95, Math.round((1 - Math.exp(-elapsedMs / 90000)) * 100));
+
   return (
     <div className="mt-10 animate-fade-in-up">
       <div className="flex items-center gap-3 mb-3">
         <span className="chapter-mark text-civic">Memproses</span>
         <span className="flex-1 h-px bg-paper-edge" />
+        <span className="font-mono text-caption text-ink-mid tabular-nums">
+          {elapsed}
+        </span>
       </div>
+
       <div className="bg-civic/5 border border-civic/20 rounded-lg p-4">
-        <p className="text-body-lg text-ink font-medium">
-          Agen sedang bekerja
-          <span className="ml-2 inline-flex gap-1 align-middle">
-            <span className="w-1.5 h-1.5 rounded-full bg-civic animate-pulse" />
-            <span className="w-1.5 h-1.5 rounded-full bg-civic animate-pulse [animation-delay:150ms]" />
-            <span className="w-1.5 h-1.5 rounded-full bg-civic animate-pulse [animation-delay:300ms]" />
+        <div className="flex items-baseline justify-between gap-3">
+          <p className="text-body-lg text-ink font-medium">
+            {PHASE_LABELS[currentAgent]}
+            <span className="ml-2 inline-flex gap-1 align-middle">
+              <span className="w-1.5 h-1.5 rounded-full bg-civic animate-pulse" />
+              <span className="w-1.5 h-1.5 rounded-full bg-civic animate-pulse [animation-delay:150ms]" />
+              <span className="w-1.5 h-1.5 rounded-full bg-civic animate-pulse [animation-delay:300ms]" />
+            </span>
+          </p>
+          <span className="font-mono text-caption text-ink-mid tabular-nums shrink-0">
+            {events.length} peristiwa
           </span>
-        </p>
-        <p className="mt-1 text-body text-ink-mid">
-          {eventsCount > 0
-            ? `${eventsCount} peristiwa tercatat sejauh ini.`
-            : "Menunggu langkah pertama."}
-        </p>
-        <p className="mt-3 text-caption text-ink-faint max-w-[58ch]">
+        </div>
+
+        <div className="mt-3 h-1 bg-civic/10 rounded-full overflow-hidden">
+          <div
+            className="h-full bg-civic/70 transition-[width] duration-1000 ease-out"
+            style={{ width: `${pct}%` }}
+          />
+        </div>
+
+        <ol className="mt-4 flex flex-wrap gap-x-3 gap-y-1.5 text-caption">
+          {PHASE_ORDER.filter((a) => a !== "orchestrator").map((agent) => {
+            const active = agent === currentAgent;
+            const done = agentsSeen.has(agent) && !active;
+            return (
+              <li
+                key={agent}
+                className="flex items-center gap-1.5 font-mono uppercase tracking-editorial"
+              >
+                <PhaseDot state={active ? "active" : done ? "done" : "pending"} />
+                <span
+                  className={
+                    active
+                      ? "text-civic"
+                      : done
+                        ? "text-ink-mid"
+                        : "text-ink-faint"
+                  }
+                >
+                  {PHASE_LABELS[agent]}
+                </span>
+              </li>
+            );
+          })}
+        </ol>
+
+        <p className="mt-4 text-caption text-ink-faint max-w-[58ch] leading-relaxed">
           Opus 4.7 (mode xhigh effort) biasanya memerlukan 2–4 menit untuk
           kueri klinis yang kompleks. Jejak agen di sebelah kanan
           menampilkan setiap keputusan saat terjadi.
@@ -181,4 +265,19 @@ function ThinkingIndicator({ eventsCount }: { eventsCount: number }) {
       </div>
     </div>
   );
+}
+
+function PhaseDot({ state }: { state: "done" | "active" | "pending" }) {
+  if (state === "active") {
+    return (
+      <span className="relative inline-flex w-2 h-2">
+        <span className="absolute inset-0 rounded-full bg-civic/30 animate-ping" />
+        <span className="relative inline-block w-2 h-2 rounded-full bg-civic" />
+      </span>
+    );
+  }
+  if (state === "done") {
+    return <span className="inline-block w-2 h-2 rounded-full bg-civic/60" />;
+  }
+  return <span className="inline-block w-2 h-2 rounded-full border border-paper-edge bg-white" />;
 }

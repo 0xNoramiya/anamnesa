@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 
 const API_BASE = process.env.NEXT_PUBLIC_ANAMNESA_API ?? "";
 
@@ -11,22 +11,21 @@ interface Props {
 }
 
 /**
- * Modal that displays a cached PDF via the browser's built-in viewer
- * (inside an iframe). The backend serves `Content-Disposition: inline`
- * so the iframe renders rather than prompting a download.
- *
- * We append `#page=N&toolbar=1&view=FitH` to the PDF URL — the major
- * browsers honor these fragment params.
+ * Modal that displays a cached PDF. Desktop renders an inline iframe using
+ * the browser's built-in viewer. Mobile (and iOS Safari in particular) can
+ * not render PDFs in iframes reliably, so we show an "open in new tab" card
+ * that hands off to the OS's native PDF viewer.
  */
 export function PdfViewer({ docId, page, onClose }: Props) {
-  // Close on Escape.
+  const [isMobile, setIsMobile] = useState(false);
+
+  // Close on Escape + body scroll lock.
   useEffect(() => {
     if (!docId) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") onClose();
     };
     window.addEventListener("keydown", onKey);
-    // Lock body scroll while modal is open.
     const prev = document.body.style.overflow;
     document.body.style.overflow = "hidden";
     return () => {
@@ -34,6 +33,16 @@ export function PdfViewer({ docId, page, onClose }: Props) {
       document.body.style.overflow = prev;
     };
   }, [docId, onClose]);
+
+  // Track viewport so we can swap iframe → link card on narrow screens.
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const mq = window.matchMedia("(max-width: 768px)");
+    const update = () => setIsMobile(mq.matches);
+    update();
+    mq.addEventListener("change", update);
+    return () => mq.removeEventListener("change", update);
+  }, []);
 
   if (!docId) return null;
 
@@ -96,12 +105,74 @@ export function PdfViewer({ docId, page, onClose }: Props) {
           </div>
         </header>
         <div className="flex-1 bg-paper-deep">
-          <iframe
-            key={src}
-            src={src}
-            title={`${docId} hal ${page}`}
-            className="w-full h-full border-0"
-          />
+          {isMobile ? (
+            <div className="h-full flex items-center justify-center p-6">
+              <a
+                href={externalHref}
+                target="_blank"
+                rel="noreferrer"
+                onClick={onClose}
+                className="group w-full max-w-sm bg-white border border-paper-edge
+                           rounded-lg p-6 shadow-card hover:border-civic
+                           hover:shadow-md transition-all active:scale-[0.98]"
+              >
+                <div className="flex items-start gap-4">
+                  <div
+                    className="shrink-0 w-12 h-12 rounded-md bg-civic/10
+                               flex items-center justify-center text-civic"
+                  >
+                    <svg
+                      width="22"
+                      height="22"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.7"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                      <path d="M14 2v6h6" />
+                    </svg>
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-caption font-mono uppercase tracking-editorial text-ink-mid">
+                      Dokumen · hal {page}
+                    </p>
+                    <p className="mt-1 text-base font-medium text-ink break-words leading-snug">
+                      {docId}
+                    </p>
+                    <p className="mt-3 text-sm text-civic font-medium inline-flex items-center gap-1.5 group-hover:gap-2 transition-all">
+                      Buka PDF di tab baru
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                      >
+                        <path d="M7 17L17 7M9 7h8v8" />
+                      </svg>
+                    </p>
+                    <p className="mt-3 text-xs text-ink-mid leading-relaxed">
+                      Tampilan PDF bawaan peramban ponsel lebih stabil
+                      daripada di dalam aplikasi.
+                    </p>
+                  </div>
+                </div>
+              </a>
+            </div>
+          ) : (
+            <iframe
+              key={src}
+              src={src}
+              title={`${docId} hal ${page}`}
+              className="w-full h-full border-0"
+            />
+          )}
         </div>
       </div>
     </div>

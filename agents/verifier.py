@@ -51,12 +51,14 @@ from core.state import (
     QueryState,
     VerificationResult,
 )
+from core.trace import trace
 
 log = structlog.get_logger("anamnesa.agents.verifier")
 
 DEFAULT_MODEL_ID = "claude-opus-4-7"
 MAX_OUTPUT_TOKENS = 16_000  # includes adaptive-thinking tokens on Opus 4.7
 DEFAULT_THINKING_BUDGET = 12_000
+DEFAULT_EFFORT = "xhigh"  # one of: low, medium, high, xhigh
 MAX_LOOP_ITERATIONS = 8
 PROMPT_PATH = Path(__file__).parent / "prompts" / "verifier.md"
 
@@ -490,6 +492,7 @@ class OpusVerifier:
         system_prompt: str | None = None,
         thinking_budget: int = DEFAULT_THINKING_BUDGET,
         max_output_tokens: int = MAX_OUTPUT_TOKENS,
+        effort: str = DEFAULT_EFFORT,
     ) -> None:
         if anthropic_client is None and not api_key:
             raise ValueError(
@@ -507,6 +510,7 @@ class OpusVerifier:
         )
         self.thinking_budget = thinking_budget
         self.max_output_tokens = max_output_tokens
+        self.effort = effort
         self.last_usage: dict[str, Any] | None = None
 
     # ---------------------------------------------------------------- run
@@ -540,10 +544,12 @@ class OpusVerifier:
             "system": system_blocks,
             "tools": tools,
         }
-        # Opus 4.7: adaptive thinking only. See drafter.py for rationale.
+        # Opus 4.7 / Sonnet 4.6: adaptive thinking only. `effort` is tunable;
+        # Verifier is a structured classifier so `high` or even `medium`
+        # preserves correctness at a large latency win.
         if self.thinking_budget > 0:
             kwargs_base["thinking"] = {"type": "adaptive"}
-            kwargs_base["output_config"] = {"effort": "xhigh"}
+            kwargs_base["output_config"] = {"effort": self.effort}
 
         usage_totals = {"input_tokens": 0, "output_tokens": 0, "thinking_tokens": 0}
         started = time.perf_counter()
@@ -552,6 +558,16 @@ class OpusVerifier:
         iterations = 0
         while iterations < MAX_LOOP_ITERATIONS:
             iterations += 1
+
+            # Heartbeat so the UI sees the verifier is alive; a single
+            # verification turn under 1M-ctx + xhigh can run 30-60s.
+            state.append_trace(
+                trace(
+                    "verifier",
+                    "thinking",
+                    payload={"iteration": iterations},
+                )
+            )
 
             response = self._client.messages.create(
                 messages=list(messages),

@@ -60,12 +60,14 @@ from core.state import (
     QueryState,
     RetrievalFilters,
 )
+from core.trace import trace
 
 log = structlog.get_logger("anamnesa.agents.drafter")
 
 DEFAULT_MODEL_ID = "claude-opus-4-7"
 MAX_OUTPUT_TOKENS = 16_000  # includes adaptive-thinking tokens on Opus 4.7
 DEFAULT_THINKING_BUDGET = 8000
+DEFAULT_EFFORT = "xhigh"  # one of: low, medium, high, xhigh
 MAX_LOOP_ITERATIONS = 8
 PROMPT_PATH = Path(__file__).parent / "prompts" / "drafter.md"
 
@@ -452,6 +454,7 @@ class OpusDrafter:
         system_prompt: str | None = None,
         thinking_budget: int = DEFAULT_THINKING_BUDGET,
         max_output_tokens: int = MAX_OUTPUT_TOKENS,
+        effort: str = DEFAULT_EFFORT,
     ) -> None:
         if anthropic_client is None and not api_key:
             raise ValueError(
@@ -469,6 +472,7 @@ class OpusDrafter:
         )
         self.thinking_budget = thinking_budget
         self.max_output_tokens = max_output_tokens
+        self.effort = effort
         self.last_usage: dict[str, Any] | None = None
 
     # ---------------------------------------------------------------- run
@@ -519,11 +523,12 @@ class OpusDrafter:
             "tools": tools,
         }
         # Opus 4.7: adaptive thinking only. `budget_tokens` / `enabled`
-        # returns 400 on this model. `output_config.effort=xhigh` is the
-        # recommended setting for agentic/coding use per Claude-API docs.
+        # returns 400 on this model. `output_config.effort` tuning: xhigh
+        # is safest/slowest, high is ~40-60% faster with a small quality
+        # delta for structured tool-use loops.
         if self.thinking_budget > 0:
             kwargs_base["thinking"] = {"type": "adaptive"}
-            kwargs_base["output_config"] = {"effort": "xhigh"}
+            kwargs_base["output_config"] = {"effort": self.effort}
 
         usage_totals = {"input_tokens": 0, "output_tokens": 0, "thinking_tokens": 0}
         started = time.perf_counter()
@@ -540,6 +545,17 @@ class OpusDrafter:
         iterations = 0
         while iterations < MAX_LOOP_ITERATIONS:
             iterations += 1
+
+            # Heartbeat: Drafter turns can take 30-90s each under xhigh
+            # effort. Emit a trace event before each LLM call so the UI
+            # knows the phase is alive.
+            state.append_trace(
+                trace(
+                    "drafter",
+                    "thinking",
+                    payload={"iteration": iterations},
+                )
+            )
 
             # Pass a shallow copy so captures/logs/tests see the messages
             # list at the moment of the call, not after later mutations.
@@ -616,6 +632,19 @@ class OpusDrafter:
                         tool_input=tool_input,
                         attempt_num=base_attempt_num + intra_retrieval_calls,
                     )
+                    state.append_trace(
+                        trace(
+                            "drafter",
+                            "tool_search_guidelines",
+                            payload={
+                                "iteration": iterations,
+                                "query": str(tool_input.get("query", ""))[:120],
+                                "returned_chunks": len(
+                                    result_payload.get("chunks", [])
+                                ),
+                            },
+                        )
+                    )
                     log.info(
                         "tool_dispatched",
                         tool="search_guidelines",
@@ -625,6 +654,16 @@ class OpusDrafter:
                     )
                 elif tool_name == "get_full_section":
                     result_payload = self._dispatch_get_full_section(tool_input)
+                    state.append_trace(
+                        trace(
+                            "drafter",
+                            "tool_get_full_section",
+                            payload={
+                                "iteration": iterations,
+                                "doc_id": str(tool_input.get("doc_id", ""))[:80],
+                            },
+                        )
+                    )
                     log.info(
                         "tool_dispatched",
                         tool="get_full_section",
