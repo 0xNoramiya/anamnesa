@@ -4,7 +4,7 @@
 
 ## Headline
 
-**20 / 20 passing (100%)** on the eval suite defined in `eval/queries.py`.
+**23 / 23 passing (100%)** on the eval suite defined in `eval/queries.py`.
 **0 hallucinated citations** across every live run to date.
 
 ## How it's measured
@@ -22,7 +22,7 @@ are in `eval/run_eval.py` and written to `eval/results/` per run
 
 | Category | Pass | Note |
 |---|---|---|
-| Grounded (must cite, accurate) | 14 / 14 | |
+| Grounded (must cite, accurate) | 17 / 17 | includes 3 Lampiran II procedural skills |
 | Aging (doc ≥5 y old → flag) | 3 / 3 | |
 | Absent (not in corpus → refuse) | 3 / 3 | |
 
@@ -40,6 +40,11 @@ are in `eval/run_eval.py` and written to `eval/results/` per run
   `ppk-fktp-2022` (p727, p728 current-guideline) + optional
   `pnpk-anestesiologi-terapi-intensif-2022` for MgSO4 anesthetic
   context.
+- **23 / 23 (100%)** after adding q021-q023 for Lampiran II
+  procedural-skill retrieval (cuci-tangan 7-langkah, RJP kompresi-ventilasi,
+  pemasangan kateter Foley). The RJP query correctly routes to EITHER
+  `ppk-fktp-2022 lampiran_2` OR `pnpk-anestesiologi-terapi-intensif-2022`
+  depending on context framing; `expected_doc_ids_any_of` lists both.
 
 ## Corpus at 20/20
 

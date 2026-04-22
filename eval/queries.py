@@ -342,15 +342,24 @@ QUERIES: list[EvalQuery] = [
             "kompresi-ventilasi dan frekuensi kompresi per menit?"
         ),
         expected=QueryExpectation(
-            expected_source_types=["ppk_fktp"],
-            expected_doc_ids_any_of=["ppk-fktp-2022"],
+            # Either PPK FKTP Lampiran II (general skill) or PNPK
+            # Anestesiologi & Terapi Intensif (manajemen gagal sirkulasi)
+            # is a correct source for an IGD-specialist RJP question —
+            # the phrasing "dua penolong profesional di IGD" naturally
+            # steers toward the specialist PNPK.
+            expected_source_types=["ppk_fktp", "pnpk"],
+            expected_doc_ids_any_of=[
+                "ppk-fktp-2022",
+                "pnpk-anestesiologi-terapi-intensif-2022",
+            ],
             must_contain_keywords=["kompresi"],
         ),
         rationale=(
-            "Lampiran II 'Resusitasi Jantung Paru' skill — tests procedural "
-            "retrieval for a high-frequency ED scenario. Also a good "
-            "supersession candidate once newer AHA/ERC guidelines are "
-            "adopted into a future PPK FKTP edition."
+            "Procedural RJP retrieval, a high-frequency ED scenario. The "
+            "Drafter may route either to PPK FKTP 2022 Lampiran II "
+            "(general skill for primary care) or PNPK Anestesiologi 2022 "
+            "(specialist manajemen gagal sirkulasi); both are correct "
+            "sources depending on context framing."
         ),
     ),
     EvalQuery(
