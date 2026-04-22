@@ -315,6 +315,63 @@ QUERIES: list[EvalQuery] = [
         ),
         rationale="Wells criteria not in corpus; must refuse.",
     ),
+    # ---- grounded: PPK FKTP Lampiran II procedural skills (3) ----
+    EvalQuery(
+        id="q021",
+        category="grounded",
+        query=(
+            "Teknik cuci tangan 7 langkah sesuai WHO di fasilitas kesehatan. "
+            "Urutan langkah dan waktu minimum antisepsis sebelum tindakan?"
+        ),
+        expected=QueryExpectation(
+            expected_source_types=["ppk_fktp"],
+            expected_doc_ids_any_of=["ppk-fktp-2022"],
+            must_contain_keywords=["cuci tangan"],
+        ),
+        rationale=(
+            "Lampiran II universal precaution: tests that the newly-indexed "
+            "procedural-skill content is retrievable. 2022 PPK FKTP is the "
+            "current guideline so no aging flag expected."
+        ),
+    ),
+    EvalQuery(
+        id="q022",
+        category="grounded",
+        query=(
+            "RJP dewasa oleh dua penolong profesional di IGD. Rasio "
+            "kompresi-ventilasi dan frekuensi kompresi per menit?"
+        ),
+        expected=QueryExpectation(
+            expected_source_types=["ppk_fktp"],
+            expected_doc_ids_any_of=["ppk-fktp-2022"],
+            must_contain_keywords=["kompresi"],
+        ),
+        rationale=(
+            "Lampiran II 'Resusitasi Jantung Paru' skill — tests procedural "
+            "retrieval for a high-frequency ED scenario. Also a good "
+            "supersession candidate once newer AHA/ERC guidelines are "
+            "adopted into a future PPK FKTP edition."
+        ),
+    ),
+    EvalQuery(
+        id="q023",
+        category="grounded",
+        query=(
+            "Prosedur pemasangan kateter urin Foley pada pasien dewasa pria. "
+            "Ukuran kateter yang disarankan dan teknik aseptik?"
+        ),
+        expected=QueryExpectation(
+            expected_source_types=["ppk_fktp"],
+            expected_doc_ids_any_of=["ppk-fktp-2022"],
+            must_contain_keywords=["kateter"],
+        ),
+        rationale=(
+            "Lampiran II sistem genitourinarius — procedural query that "
+            "previously had NO coverage (Lampiran I only covered urinary "
+            "CONDITIONS, not the catheterisation technique itself). Tests "
+            "the expansion's retrieval path end-to-end."
+        ),
+    ),
 ]
 
 

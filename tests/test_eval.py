@@ -30,8 +30,8 @@ from eval.run_eval import run_all, score_result
 # ---------------------------------------------------------------------------
 
 
-def test_queries_parse_and_count_is_20() -> None:
-    assert len(QUERIES) == 20
+def test_queries_parse_and_count_is_23() -> None:
+    assert len(QUERIES) == 23
     ids = [q.id for q in QUERIES]
     assert len(set(ids)) == len(ids), "duplicate ids in QUERIES"
     # All three categories represented.
@@ -41,7 +41,7 @@ def test_queries_parse_and_count_is_20() -> None:
 
 def test_category_distribution() -> None:
     cats = [q.category for q in QUERIES]
-    assert cats.count("grounded") == 14
+    assert cats.count("grounded") == 17
     assert cats.count("aging") == 3
     assert cats.count("absent") == 3
 
