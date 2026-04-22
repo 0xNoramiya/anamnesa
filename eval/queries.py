@@ -172,13 +172,19 @@ QUERIES: list[EvalQuery] = [
     ),
     EvalQuery(
         id="q010",
-        category="grounded",
+        category="absent",
         query="Bayi prematur 32 minggu dengan apnea of prematurity, pilihan terapi medikamentosa?",
         expected=QueryExpectation(
-            expected_source_types=["pnpk"],
-            expected_doc_ids_any_of=["pnpk-resusitasi-bblr-2018"],
+            refusal_reason=RefusalReason.CORPUS_SILENT,
+            min_citations=0,
         ),
-        rationale="Prematurity apnea — NICU/ED shared presentation.",
+        rationale=(
+            "Apnea of prematurity as a standalone condition with medikamentosa "
+            "(caffeine/methylxanthine) is NOT in our 25 ingested docs — the "
+            "BBLR PNPK only covers apnea in VTP/resuscitation context. This "
+            "verifies the system refuses cleanly rather than hallucinating from "
+            "the adjacent content it does have."
+        ),
     ),
     EvalQuery(
         id="q011",

@@ -114,6 +114,34 @@ Refusal is better than guessing. But spurious refusal defeats the product.
   "heart_failure", "community_acquired_pneumonia").
 - `red_flags` — clinical alarm signs if the query implies any (e.g.
   "syok", "penurunan kesadaran"). Leave empty if none implied.
+
+**Cross-language keyword expansion (critical for retrieval).** The
+corpus is 100% Bahasa. If the user's query contains ANY English
+medical term — either standalone or mixed with Bahasa — you MUST
+emit the Bahasa equivalent(s) in `keywords_id`, not only in
+`keywords_en`. BM25 over Indonesian guidelines will not hit
+"apnea of prematurity" or "STEMI" verbatim; it needs "apnea pada
+bayi prematur" or "infark miokard elevasi ST" to land.
+
+Common English → Bahasa medical translations to include when the
+English term appears in the query:
+- "apnea of prematurity" → "apnea pada prematur", "apnea bayi
+  prematur", "serangan apnea neonatus"
+- "sepsis" → also "sepsis" (same word), "infeksi sistemik"
+- "STEMI" → also "STEMI", "infark miokard dengan elevasi ST",
+  "sindroma koroner akut dengan elevasi ST"
+- "acute coronary syndrome" → "sindroma koroner akut", "SKA"
+- "heart failure" → "gagal jantung", "GJ"
+- "community-acquired pneumonia" → "pneumonia komunitas",
+  "pneumonia didapat di komunitas"
+- "dengue shock syndrome" → "DBD syok", "DSS", "sindroma syok dengue"
+- "preeclampsia" → "preeklampsia"
+- "pulmonary embolism" → "emboli paru"
+- "atrial fibrillation" → "fibrilasi atrium", "FA"
+- "deep vein thrombosis" → "trombosis vena dalam", "DVT"
+
+When in doubt, expand both ways. Retrieval recall matters more than
+`keywords_id` list brevity.
 </bahasa_rule>
 
 <examples>
@@ -144,6 +172,22 @@ Input: "Kriteria rujukan hipertensi emergensi dari Puskesmas"
   "red_flags": ["krisis hipertensi", "target organ damage"]
 }
 ```
+
+Input: "Bayi prematur 32 minggu dengan apnea of prematurity, pilihan terapi medikamentosa?"
+```json
+{
+  "action": "normalize",
+  "structured_query": "Tatalaksana medikamentosa apnea pada bayi prematur 32 minggu",
+  "condition_tags": ["apnea_of_prematurity", "pediatric", "neonatal"],
+  "intent": "tatalaksana",
+  "patient_context": "pediatric",
+  "keywords_id": ["apnea pada prematur", "apnea bayi prematur", "serangan apnea neonatus", "bayi prematur", "BBLR", "medikamentosa", "metilxantin", "kafein"],
+  "keywords_en": ["apnea of prematurity", "preterm", "methylxanthine", "caffeine citrate"],
+  "red_flags": []
+}
+```
+(Note the Bahasa expansion of "apnea of prematurity" — the corpus
+is Bahasa; matching requires Bahasa keywords.)
 
 Input: "Resep nasi goreng yang enak dong"
 ```json

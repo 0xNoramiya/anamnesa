@@ -41,9 +41,9 @@ def test_queries_parse_and_count_is_20() -> None:
 
 def test_category_distribution() -> None:
     cats = [q.category for q in QUERIES]
-    assert cats.count("grounded") == 15
+    assert cats.count("grounded") == 14
     assert cats.count("aging") == 3
-    assert cats.count("absent") == 2
+    assert cats.count("absent") == 3
 
 
 # ---------------------------------------------------------------------------
@@ -69,7 +69,7 @@ async def test_dry_run_single_query_passes_scoring(tmp_path: Path) -> None:
 @pytest.mark.asyncio
 async def test_dry_run_absent_category_produces_refusal() -> None:
     results = await run_all(dry_run=True, category="absent", max_concurrent=1)
-    assert len(results) == 2
+    assert len(results) == 3
     for r in results:
         assert r["refusal_reason"] == RefusalReason.CORPUS_SILENT.value
         assert r["score"]["refusal_match"] is True
@@ -198,8 +198,8 @@ async def test_exception_in_orchestrator_isolated_per_query(monkeypatch: Any) ->
 @pytest.mark.asyncio
 async def test_category_filter_narrows_to_absent() -> None:
     results = await run_all(dry_run=True, category="absent", max_concurrent=1)
-    assert len(results) == 2
-    assert {r["id"] for r in results} == {"q019", "q020"}
+    assert len(results) == 3
+    assert {r["id"] for r in results} == {"q010", "q019", "q020"}
 
 
 @pytest.mark.asyncio
