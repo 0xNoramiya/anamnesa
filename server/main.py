@@ -37,7 +37,8 @@ from ulid import ULID
 
 from core.manifest import Manifest
 from core.orchestrator import Orchestrator
-from core.state import QueryState, TraceEvent
+from core.retrieval import HybridRetriever
+from core.state import NormalizedQuery, QueryState, RetrievalFilters, TraceEvent
 
 load_dotenv()
 log = structlog.get_logger("anamnesa.server")
@@ -75,7 +76,8 @@ async def _lifespan(app: FastAPI):
             "ANTHROPIC_API_KEY not set. Copy .env.example to .env."
         )
 
-    retriever = LocalRetriever(retriever=default_retriever())
+    hybrid = default_retriever()
+    retriever = LocalRetriever(retriever=hybrid)
     orchestrator = Orchestrator(
         normalizer=HaikuNormalizer(
             model_id=os.getenv("ANAMNESA_MODEL_NORMALIZER", "claude-haiku-4-5-20251001"),
@@ -101,8 +103,9 @@ async def _lifespan(app: FastAPI):
     manifest = _load_manifest_sync(Path("catalog/manifest.json"))
 
     app.state.orchestrator = orchestrator
+    app.state.hybrid = hybrid         # exposed for /api/search (fast mode)
     app.state.manifest = manifest
-    app.state.running_queries = {}  # query_id -> asyncio.Queue
+    app.state.running_queries = {}    # query_id -> asyncio.Queue
     app.state.tasks = set()           # strong refs to in-flight background tasks
     log.info("anamnesa.boot", docs=len(manifest.documents))
     yield
@@ -164,6 +167,45 @@ async def manifest_summary() -> dict[str, Any]:
         "total": len(m.documents),
         "by_status": by_status,
         "by_source_type": by_source,
+    }
+
+
+@app.get("/api/search")
+async def fast_search(q: str, limit: int = 20) -> dict[str, Any]:
+    """Fast-path retrieval: no LLM, no agents.
+
+    Returns the top-N ranked chunks for a query as JSON. Intended for
+    pasal.id-style "just show me which PDF says this" browsing. The
+    agentic pipeline (POST /api/query) is the opt-in mode for actual
+    synthesis with citations + verifier.
+    """
+    q_clean = q.strip()
+    if not q_clean:
+        raise HTTPException(400, "empty query")
+    # Cap to sane bounds — retriever fans out both BM25 + vector by 3x
+    # internally, so limit=20 already means 60 candidates fused.
+    limit = max(1, min(int(limit), 50))
+
+    hybrid: HybridRetriever = app.state.hybrid
+    nq = NormalizedQuery(
+        structured_query=q_clean,
+        keywords_id=[t for t in q_clean.split() if len(t) >= 2],
+    )
+    chunks = hybrid.search_guidelines(nq, RetrievalFilters(top_k=limit))
+
+    # Also surface doc-level aggregates so the UI can show "3 PDFs, 12 hits".
+    per_doc: dict[str, int] = {}
+    for c in chunks:
+        per_doc[c.doc_id] = per_doc.get(c.doc_id, 0) + 1
+
+    return {
+        "query": q_clean,
+        "count": len(chunks),
+        "docs": [
+            {"doc_id": d, "hits": n}
+            for d, n in sorted(per_doc.items(), key=lambda kv: -kv[1])
+        ],
+        "results": [c.model_dump(mode="json") for c in chunks],
     }
 
 
@@ -235,10 +277,11 @@ async def _run_query(
             )
             await queue.put(None)
 
-    try:
-        await asyncio.gather(run_orch(), pump_events())
-    finally:
-        app.state.running_queries.pop(query_id, None)
+    # Intentionally NOT popping running_queries here — see the stream
+    # handler. Fast-finishing queries (e.g. normalizer refusals) can
+    # complete before the client connects to the stream; keeping the
+    # queue alive until the stream is drained avoids a race 404.
+    await asyncio.gather(run_orch(), pump_events())
 
 
 def _trace_to_json(ev: TraceEvent) -> dict[str, Any]:
@@ -252,15 +295,20 @@ async def stream(query_id: str) -> EventSourceResponse:
         raise HTTPException(404, f"no running query {query_id!r}")
 
     async def events():
-        while True:
-            item = await queue.get()
-            if item is None:
-                yield {"event": "done", "data": ""}
-                return
-            yield {
-                "event": item["kind"],
-                "data": json.dumps(item["payload"], ensure_ascii=False),
-            }
+        try:
+            while True:
+                item = await queue.get()
+                if item is None:
+                    yield {"event": "done", "data": ""}
+                    return
+                yield {
+                    "event": item["kind"],
+                    "data": json.dumps(item["payload"], ensure_ascii=False),
+                }
+        finally:
+            # The stream owns queue cleanup — stream completion (drained
+            # or client disconnect) is the correct trigger to pop.
+            app.state.running_queries.pop(query_id, None)
 
     return EventSourceResponse(events())
 
@@ -280,4 +328,10 @@ async def pdf(doc_id: str) -> FileResponse:
     # Sync stat is cheap; ruff ASYNC240 is over-cautious for a one-shot check.
     if not _cache_path_exists_sync(p):
         raise HTTPException(404, f"PDF file missing at {p}")
-    return FileResponse(path=p, media_type="application/pdf", filename=p.name)
+    # `inline` so the browser's built-in PDF viewer (or our iframe) renders
+    # it; omit `filename=` to avoid the default `attachment` disposition.
+    return FileResponse(
+        path=p,
+        media_type="application/pdf",
+        content_disposition_type="inline",
+    )

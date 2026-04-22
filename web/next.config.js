@@ -1,13 +1,12 @@
 /** @type {import('next').NextConfig} */
-const backend =
-  process.env.NEXT_PUBLIC_ANAMNESA_API ?? "http://127.0.0.1:8000";
-
-const nextConfig = {
-  async rewrites() {
-    // Proxy /api/* to the FastAPI backend so the Next.js dev server
-    // and the API are same-origin to the browser. No CORS games in dev.
-    return [{ source: "/api/:path*", destination: `${backend}/api/:path*` }];
-  },
-};
+/*
+ * We deliberately do NOT use Next's `rewrites()` to proxy /api/* to
+ * the FastAPI backend. Its dev-server proxy buffers responses and
+ * chokes on long-lived SSE connections (socket hang up after the
+ * first query). The frontend calls the backend directly via
+ * NEXT_PUBLIC_ANAMNESA_API, and the backend's CORS middleware allows
+ * localhost:3000 in dev. In production, put Caddy in front of both.
+ */
+const nextConfig = {};
 
 module.exports = nextConfig;

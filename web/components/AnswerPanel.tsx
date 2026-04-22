@@ -5,20 +5,12 @@ import { REFUSAL_MESSAGES_ID } from "@/lib/refusalMessages";
 
 interface Props {
   final: FinalResponse | null;
+  onOpenPdf?: (docId: string, page: number) => void;
 }
 
-/**
- * Journal-article-style answer panel. Renders the Drafter's content,
- * swaps inline [[key]] markers for superscript citation numbers, and
- * lays out a numbered reference list with a currency badge per entry.
- * Refusal cases render a distinct oxblood editorial note.
- */
-export function AnswerPanel({ final }: Props) {
+export function AnswerPanel({ final, onOpenPdf }: Props) {
   if (!final) return null;
-
-  if (final.refusal_reason) {
-    return <Refusal final={final} />;
-  }
+  if (final.refusal_reason) return <Refusal final={final} />;
 
   const citations = final.citations;
   const flagsByKey = new Map<string, CurrencyFlag>(
@@ -30,34 +22,35 @@ export function AnswerPanel({ final }: Props) {
 
   return (
     <article className="animate-fade-in-up">
-      <div className="flex items-center gap-3 mb-2">
-        <span className="chapter-mark">Jawaban Anamnesa</span>
-        <span className="flex-1 rule" />
-        <span className="chapter-mark">
-          {citations.length} kutipan · {final.currency_flags.length} bendera
+      <div className="flex items-center gap-3 mb-3">
+        <span className="chapter-mark">Jawaban</span>
+        <span className="flex-1 h-px bg-paper-edge" />
+        <span className="chapter-mark text-ink-faint">
+          {citations.length} kutipan
+          {final.currency_flags.length > 0 && (
+            <> · {final.currency_flags.length} bendera</>
+          )}
         </span>
       </div>
 
-      <BodyProse
-        content={final.answer_markdown}
-        indexByKey={indexByKey}
-      />
+      <BodyProse content={final.answer_markdown} indexByKey={indexByKey} />
 
-      <section className="mt-12">
-        <div className="flex items-center gap-3 mb-3">
-          <span className="chapter-mark">Referensi</span>
-          <span className="flex-1 rule" />
+      <section className="mt-10">
+        <div className="flex items-center gap-3 mb-4">
+          <h2 className="chapter-mark">Referensi</h2>
+          <span className="flex-1 h-px bg-paper-edge" />
         </div>
-        <ol className="space-y-4">
+        <div className="space-y-3">
           {citations.map((c, i) => (
-            <ReferenceItem
+            <ReferenceCard
               key={c.key}
               index={i + 1}
               citation={c}
               flag={flagsByKey.get(c.key)}
+              onOpenPdf={onOpenPdf}
             />
           ))}
-        </ol>
+        </div>
       </section>
 
       <Disclaimer />
@@ -72,48 +65,50 @@ function BodyProse({
   content: string;
   indexByKey: Map<string, number>;
 }) {
-  // Parse: replace inline [[key]] with superscripts linked to the
-  // reference list. We keep paragraph breaks but strip markdown heading
-  // hashes — we style them ourselves.
   const paragraphs = content
     .split(/\n{2,}/)
     .map((p) => p.trim())
     .filter(Boolean);
 
   return (
-    <div className="prose-anamnesa">
+    <div className="text-ink">
       {paragraphs.map((p, i) => {
-        const isHeading = /^#{2,6}\s+/.test(p);
-        if (isHeading) {
-          const text = p.replace(/^#{2,6}\s+/, "");
+        const headingMatch = /^(#{2,6})\s+(.*)$/s.exec(p);
+        if (headingMatch) {
+          const text = headingMatch[2];
           return (
             <h3
               key={i}
-              className="font-display text-display-md text-ink mt-8 mb-3"
+              className="font-semibold text-ink text-lg mt-8 mb-3"
             >
-              {text}
+              {renderInline(text, indexByKey)}
             </h3>
           );
         }
-        const isList = /^[-*]\s+/.test(p);
-        if (isList) {
-          const items = p.split(/\n/).map((l) => l.replace(/^[-*]\s+/, ""));
+
+        // Pipe-delimited markdown tables (GFM-ish). Detect: every
+        // non-blank line starts and ends with "|", and the 2nd line is
+        // a separator ("| --- | --- |").
+        const tableNodes = maybeRenderTable(p, indexByKey, i);
+        if (tableNodes) return tableNodes;
+
+        if (/^[-*]\s+/m.test(p)) {
+          const items = p
+            .split(/\n/)
+            .filter((l) => /^[-*]\s+/.test(l))
+            .map((l) => l.replace(/^[-*]\s+/, ""));
           return (
-            <ul key={i} className="my-4 ml-6 list-disc marker:text-oxblood space-y-2">
+            <ul key={i} className="my-4 ml-5 list-disc marker:text-civic space-y-1.5">
               {items.map((item, j) => (
-                <li key={j} className="text-body-lg leading-relaxed text-ink">
+                <li key={j} className="text-body-lg leading-relaxed">
                   {renderInline(item, indexByKey)}
                 </li>
               ))}
             </ul>
           );
         }
-        const firstParagraphClasses = i === 0 ? "drop-cap" : "";
         return (
-          <p
-            key={i}
-            className={`text-body-lg leading-relaxed text-ink my-4 ${firstParagraphClasses}`}
-          >
+          <p key={i} className="text-body-lg leading-relaxed my-4">
             {renderInline(p, indexByKey)}
           </p>
         );
@@ -122,94 +117,197 @@ function BodyProse({
   );
 }
 
-/** Replace [[doc_id:pN:section]] with superscript links. */
+function maybeRenderTable(
+  block: string,
+  indexByKey: Map<string, number>,
+  key: number,
+): React.ReactNode | null {
+  // Accept both single-line (whole table on one line separated by newlines
+  // that got collapsed) and proper multi-line markdown tables.
+  // First, try splitting by newlines; if we only get one line containing
+  // multiple `| ... |` groups, split those out.
+  let lines = block.split(/\n/).map((l) => l.trim()).filter(Boolean);
+
+  if (lines.length === 1 && /\|\s*---/.test(lines[0])) {
+    // Single-line table (common when the Drafter emits compact text).
+    // Split on the pipe-run boundary: any occurrence of ` | ` after a
+    // trailing `|`. Heuristic: split on `| |` which only appears between
+    // rows in our cell format.
+    lines = lines[0].split(/(?<=\|)\s+(?=\|)/).map((l) => l.trim()).filter(Boolean);
+  }
+
+  // Must have at least header + separator + one data row.
+  if (lines.length < 3) return null;
+  if (!lines.every((l) => l.startsWith("|") && l.endsWith("|"))) return null;
+  if (!/^\|\s*[-:]{2,}/.test(lines[1].replace(/\s*\|\s*/g, "|").replace(/^\|/, "|"))) {
+    // Separator row check — loose: it must contain at least one cell of
+    // 3+ dashes (possibly with leading/trailing colons for alignment).
+    if (!lines[1].includes("---")) return null;
+  }
+
+  const parseRow = (l: string): string[] =>
+    l.slice(1, -1).split("|").map((c) => c.trim());
+
+  const header = parseRow(lines[0]);
+  const body = lines.slice(2).map(parseRow);
+
+  return (
+    <div key={key} className="my-5 overflow-x-auto -mx-1 px-1">
+      <table className="w-full border-collapse text-body">
+        <thead>
+          <tr className="border-b-2 border-ink">
+            {header.map((h, hi) => (
+              <th
+                key={hi}
+                className="text-left font-semibold text-ink py-2 px-3 align-bottom"
+              >
+                {renderInline(h, indexByKey)}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {body.map((row, ri) => (
+            <tr
+              key={ri}
+              className="border-b border-paper-edge last:border-0"
+            >
+              {row.map((cell, ci) => (
+                <td key={ci} className="py-2 px-3 align-top text-ink-mid">
+                  {renderInline(cell, indexByKey)}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/**
+ * Tokenize a paragraph into text + inline markdown + citation markers.
+ * Handles `[[doc_id:pN:section]]`, `**bold**`, and `*italic*` in one pass.
+ */
 function renderInline(
   text: string,
   indexByKey: Map<string, number>,
 ): React.ReactNode[] {
   const parts: React.ReactNode[] = [];
-  const re = /\[\[([^\]]+)\]\]/g;
+  const re = /\[\[([^\]]+)\]\]|\*\*([^*]+?)\*\*|(?<!\*)\*([^*\n]+?)\*(?!\*)/g;
   let last = 0;
   let match: RegExpExecArray | null;
   let counter = 0;
   while ((match = re.exec(text)) !== null) {
     if (match.index > last) parts.push(text.slice(last, match.index));
-    const key = match[1];
-    const n = indexByKey.get(key);
-    parts.push(
-      <a
-        key={`c-${counter++}`}
-        href={`#ref-${key}`}
-        className="cite-marker"
-        title={key}
-      >
-        {n ?? "?"}
-      </a>,
-    );
+    if (match[1] !== undefined) {
+      const key = match[1];
+      const n = indexByKey.get(key);
+      parts.push(
+        <a
+          key={`c-${counter++}`}
+          href={`#ref-${key}`}
+          className="cite-marker"
+          title={key}
+        >
+          {n ?? "?"}
+        </a>,
+      );
+    } else if (match[2] !== undefined) {
+      parts.push(
+        <strong key={`b-${counter++}`} className="font-semibold text-ink">
+          {match[2]}
+        </strong>,
+      );
+    } else if (match[3] !== undefined) {
+      parts.push(
+        <em key={`i-${counter++}`} className="italic">
+          {match[3]}
+        </em>,
+      );
+    }
     last = match.index + match[0].length;
   }
   if (last < text.length) parts.push(text.slice(last));
   return parts;
 }
 
-function ReferenceItem({
+function ReferenceCard({
   index,
   citation,
   flag,
+  onOpenPdf,
 }: {
   index: number;
   citation: Citation;
   flag?: CurrencyFlag;
+  onOpenPdf?: (docId: string, page: number) => void;
 }) {
+  const sourceType = citation.doc_id.startsWith("ppk-fktp")
+    ? "PPK FKTP"
+    : citation.doc_id.startsWith("pnpk")
+    ? "PNPK"
+    : "DOC";
   return (
-    <li id={`ref-${citation.key}`} className="flex gap-4">
-      <div className="font-mono text-sm text-oxblood shrink-0 pt-0.5 w-6 text-right tabular-nums">
-        {index}.
-      </div>
-      <div className="flex-1 min-w-0">
-        <div className="flex items-baseline gap-3 flex-wrap">
-          <span className="font-mono text-[0.78rem] text-ink-mid break-all">
-            {citation.doc_id}
-            <span className="text-ink-ghost"> · p</span>
-            <span className="tabular-nums">{citation.page}</span>
+    <article id={`ref-${citation.key}`} className="doc-card">
+      <div className="flex items-start gap-3 mb-2">
+        <div className="flex-shrink-0 font-mono text-sm text-civic font-semibold tabular-nums pt-0.5 w-6 text-right">
+          {index}.
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 flex-wrap mb-1">
+            <span className="source-pill">{sourceType}</span>
+            {flag && <CurrencyBadge flag={flag} />}
+          </div>
+          <div className="font-mono text-[0.82rem] text-ink-mid break-all">
+            <span className="text-ink font-medium">{citation.doc_id}</span>
+            <span className="text-ink-ghost"> · </span>
+            <span>hal {citation.page}</span>
             <span className="text-ink-ghost"> · </span>
             <span>{citation.section_slug}</span>
-          </span>
-          {flag && <CurrencyStamp flag={flag} />}
+          </div>
+          <blockquote className="mt-2.5 pl-3 border-l-2 border-paper-edge text-ink-mid text-body leading-relaxed">
+            {truncate(citation.chunk_text, 340)}
+          </blockquote>
+          <div className="mt-3 flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => onOpenPdf?.(citation.doc_id, citation.page)}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md
+                         bg-civic/5 border border-civic/20 text-civic
+                         text-caption font-medium
+                         hover:bg-civic hover:text-white hover:border-civic
+                         transition-colors"
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5">
+                <rect x="1.5" y="1.5" width="9" height="9" rx="1" />
+                <path d="M3.5 4.5h5M3.5 6.5h5M3.5 8.5h3" />
+              </svg>
+              Lihat PDF, hal {citation.page}
+            </button>
+          </div>
         </div>
-        <blockquote className="mt-2 pl-3 border-l-2 border-paper-edge italic text-ink-mid text-body leading-relaxed">
-          {truncate(citation.chunk_text, 360)}
-        </blockquote>
-        <a
-          href={`/api/pdf/${citation.doc_id}#page=${citation.page}`}
-          target="_blank"
-          rel="noreferrer"
-          className="inline-block mt-2 text-caption font-mono uppercase tracking-editorial text-indigo hover:text-ink transition-colors"
-        >
-          Buka PDF · hal {citation.page} →
-        </a>
       </div>
-    </li>
+    </article>
   );
 }
 
-function CurrencyStamp({ flag }: { flag: CurrencyFlag }) {
+function CurrencyBadge({ flag }: { flag: CurrencyFlag }) {
   const label = STATUS_LABELS_ID[flag.status];
-  const stampClass = `stamp stamp-${flag.status}`;
   return (
-    <span className={stampClass} title={`Terbit ${flag.source_year}`}>
+    <span className={`badge badge-${flag.status}`} title={`Terbit ${flag.source_year}`}>
       <span>{label}</span>
-      <span className="opacity-60">· {flag.source_year}</span>
+      <span className="opacity-70">· {flag.source_year}</span>
     </span>
   );
 }
 
 const STATUS_LABELS_ID: Record<string, string> = {
-  current:    "Berlaku",
-  aging:      "Menua",
+  current: "Berlaku",
+  aging: "Menua",
   superseded: "Digantikan",
-  withdrawn:  "Dicabut",
-  unknown:    "Tak Diketahui",
+  withdrawn: "Dicabut",
+  unknown: "Tak Diketahui",
 };
 
 function truncate(s: string, n: number): string {
@@ -223,13 +321,13 @@ function Refusal({ final }: { final: FinalResponse }) {
   return (
     <article className="animate-fade-in-up">
       <div className="flex items-center gap-3 mb-3">
-        <span className="chapter-mark text-oxblood">Penolakan · Refusal</span>
-        <span className="flex-1 rule" />
-        <span className="chapter-mark">{reason}</span>
+        <span className="chapter-mark text-oxblood">Penolakan</span>
+        <span className="flex-1 h-px bg-oxblood/30" />
+        <span className="chapter-mark text-oxblood">{reason}</span>
       </div>
-      <div className="border-l-4 border-oxblood pl-6 py-4">
+      <div className="bg-oxblood/5 border border-oxblood/20 rounded-lg p-5">
         <p className="text-body-lg leading-relaxed text-ink">{msg}</p>
-        <p className="mt-4 text-caption text-ink-faint font-mono uppercase tracking-editorial">
+        <p className="mt-3 text-caption text-oxblood font-mono uppercase tracking-editorial">
           Anamnesa menolak menghasilkan jawaban tanpa dasar pedoman.
         </p>
       </div>
@@ -240,8 +338,8 @@ function Refusal({ final }: { final: FinalResponse }) {
 
 function Disclaimer() {
   return (
-    <footer className="mt-12 pt-6 border-t border-paper-edge">
-      <p className="text-caption text-ink-faint leading-relaxed max-w-[56ch]">
+    <footer className="mt-10 pt-5 border-t border-paper-edge">
+      <p className="text-caption text-ink-faint leading-relaxed max-w-[62ch]">
         <strong className="text-ink-mid">Anamnesa</strong> membantu dokter
         menemukan dan mengutip pedoman Indonesia yang berlaku. Ini bukan
         alat diagnosis atau rekomendasi terapi untuk pasien individual.

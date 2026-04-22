@@ -11,6 +11,18 @@ import type {
 /** Submit state machine: the lifecycle of one query. */
 export type StreamStatus = "idle" | "submitting" | "streaming" | "done" | "error";
 
+/**
+ * Backend base URL. Browser talks to FastAPI directly (CORS-enabled) to
+ * avoid Next's dev-server rewrite proxy — that proxy buffers and hangs
+ * up on long-lived SSE connections. Override per-env via the public env
+ * var; empty string (default) = same-origin (for production behind Caddy).
+ */
+const API_BASE = process.env.NEXT_PUBLIC_ANAMNESA_API ?? "";
+
+function apiUrl(path: string): string {
+  return API_BASE ? `${API_BASE.replace(/\/$/, "")}${path}` : path;
+}
+
 interface UseQueryStreamState {
   status: StreamStatus;
   queryId: string | null;
@@ -55,7 +67,7 @@ export function useQueryStream(): UseQueryStreamState {
     abortRef.current = ac;
 
     try {
-      const createRes = await fetch("/api/query", {
+      const createRes = await fetch(apiUrl("/api/query"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query }),
@@ -70,7 +82,7 @@ export function useQueryStream(): UseQueryStreamState {
 
       setStatus("streaming");
 
-      const streamRes = await fetch(created.stream_url, {
+      const streamRes = await fetch(apiUrl(created.stream_url), {
         method: "GET",
         headers: { Accept: "text/event-stream" },
         signal: ac.signal,

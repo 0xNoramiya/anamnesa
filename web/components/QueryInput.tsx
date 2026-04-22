@@ -27,44 +27,42 @@ export function QueryInput({ onSubmit, status }: Props) {
 
   return (
     <div>
-      <form onSubmit={handleSubmit} className="relative">
-        <label
-          htmlFor="query"
-          className="chapter-mark block mb-2"
-        >
-          Pertanyaan Klinis · Query
+      <form onSubmit={handleSubmit}>
+        <label htmlFor="query" className="chapter-mark block mb-2">
+          Pertanyaan Klinis
         </label>
-        <div className="relative">
+        <div className="bg-white border border-paper-edge rounded-lg shadow-card focus-within:shadow-card-hover transition-shadow">
           <textarea
             id="query"
             value={value}
             onChange={(e) => setValue(e.target.value)}
             disabled={busy}
             rows={3}
-            placeholder="Tulis pertanyaan klinis dalam Bahasa Indonesia — Anamnesa hanya mengutip pedoman Indonesia berdasarkan Pasal 42 UU 28/2014."
-            className="w-full resize-none bg-paper-deep/40 border border-paper-edge
-                       focus:border-ink focus:outline-none focus:bg-paper
-                       px-5 py-4 text-body-lg leading-relaxed
-                       placeholder:text-ink-ghost placeholder:italic
-                       transition-colors"
+            placeholder="Tulis pertanyaan klinis dalam Bahasa Indonesia. Anamnesa mengutip pedoman Indonesia (Pasal 42 UU 28/2014 — domain publik)."
+            className="w-full resize-none bg-transparent border-0 focus:outline-none
+                       px-4 py-3 text-body-lg leading-relaxed text-ink
+                       placeholder:text-ink-ghost"
           />
-          <button
-            type="submit"
-            disabled={busy || !value.trim()}
-            className="absolute bottom-3 right-3 px-4 py-2
-                       bg-ink text-paper font-mono uppercase
-                       text-caption tracking-editorial
-                       disabled:opacity-30 disabled:cursor-not-allowed
-                       enabled:hover:bg-oxblood enabled:active:bg-oxblood-deep
-                       transition-colors"
-          >
-            {busy ? "…" : "Kirim"}
-          </button>
+          <div className="flex items-center justify-between px-4 py-2 border-t border-paper-edge">
+            <div className="text-caption text-ink-faint">
+              {value.length > 0 ? `${value.length} karakter` : "Tekan Cmd+Enter untuk kirim"}
+            </div>
+            <button
+              type="submit"
+              disabled={busy || !value.trim()}
+              className="px-4 py-1.5 rounded-md bg-civic text-white
+                         font-medium text-sm
+                         disabled:opacity-40 disabled:cursor-not-allowed
+                         enabled:hover:bg-civic-hover transition-colors"
+            >
+              {status === "submitting" ? "Memulai…" : status === "streaming" ? "Berjalan…" : "Kirim"}
+            </button>
+          </div>
         </div>
       </form>
 
       {!busy && status !== "done" && (
-        <div className="mt-5">
+        <div className="mt-6">
           <div className="chapter-mark mb-2">Contoh skenario</div>
           <ul className="space-y-1.5">
             {EXAMPLES.map((ex, i) => (
@@ -72,9 +70,9 @@ export function QueryInput({ onSubmit, status }: Props) {
                 <button
                   type="button"
                   onClick={() => setValue(ex)}
-                  className="w-full text-left text-body text-ink-mid hover:text-ink
-                             py-1.5 px-3 -ml-3 transition-colors
-                             border-l-2 border-transparent hover:border-oxblood"
+                  className="w-full text-left text-body text-ink-mid hover:text-civic
+                             py-1.5 px-3 -ml-3 rounded-md transition-colors
+                             hover:bg-civic/5"
                 >
                   {ex}
                 </button>

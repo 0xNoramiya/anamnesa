@@ -3,10 +3,8 @@
 import { useEffect, useState } from "react";
 
 /**
- * Editorial masthead — the title block at the top of every page.
- * Pays homage to Kemenkes document title blocks: display serif wordmark,
- * a small-caps subtitle, a ruled line with issue metadata, and a slim
- * row of corpus stats pulled from /api/manifest.
+ * Civic-tech masthead — like pasal.id's header block. A bold wordmark
+ * left, corpus stats right, descriptive subtitle, thin bottom rule.
  */
 export function Masthead() {
   const [info, setInfo] = useState<{ docs: number; embedder: string } | null>(
@@ -14,42 +12,41 @@ export function Masthead() {
   );
 
   useEffect(() => {
-    fetch("/api/health")
-      .then((r) => r.ok ? r.json() : null)
+    const base = process.env.NEXT_PUBLIC_ANAMNESA_API ?? "";
+    fetch(`${base.replace(/\/$/, "")}/api/health`)
+      .then((r) => (r.ok ? r.json() : null))
       .then((d) => d && setInfo({ docs: d.docs_indexed, embedder: d.embedder }))
       .catch(() => {});
   }, []);
 
   return (
-    <header className="border-b border-ink pt-10 pb-4">
-      <div className="flex items-baseline justify-between gap-6 flex-wrap">
+    <header className="pt-8 pb-5 border-b border-paper-edge">
+      <div className="flex items-end justify-between gap-6 flex-wrap">
         <div>
-          <div className="chapter-mark">
-            Referensi Pedoman Klinis Indonesia · PS1
-          </div>
-          <h1 className="font-display text-display-xl text-ink mt-1">
+          <h1 className="font-display text-display-xl text-ink leading-none">
             Anamnesa
           </h1>
+          <p className="mt-2 text-body text-ink-mid max-w-[58ch]">
+            Pencarian pedoman klinis Indonesia berbasis agen. Setiap
+            jawaban dikutip langsung ke pedoman asli, dengan bendera
+            keberlakuan.
+          </p>
         </div>
-        <div className="text-right font-mono text-caption text-ink-faint uppercase tracking-editorial leading-snug">
-          <div>Edisi Hakathon</div>
-          <div>21–27 April 2026</div>
-          <div>Banjarmasin, Kalsel</div>
-        </div>
-      </div>
-
-      <div className="mt-4 flex items-center justify-between gap-4 flex-wrap text-caption text-ink-faint">
-        <p className="italic max-w-[62ch]">
-          Alat retrieval pedoman klinis berbasis agen — Haiku 4.5 + Opus 4.7
-          via Anthropic. Korpus: UU No. 28/2014 Pasal 42 (domain publik).
-        </p>
-        {info && (
-          <div className="font-mono text-[0.72rem] uppercase tracking-editorial">
-            <span>{info.docs} dokumen</span>
-            <span className="mx-2">·</span>
-            <span>embedder: {info.embedder}</span>
+        <div className="flex flex-col items-end gap-2">
+          <div className="flex items-center gap-2 text-caption font-mono uppercase tracking-editorial text-ink-faint">
+            <span>PS1</span>
+            <span className="w-1 h-1 rounded-full bg-ink-ghost" />
+            <span>Hakathon Opus 4.7</span>
+            <span className="w-1 h-1 rounded-full bg-ink-ghost" />
+            <span>21–27 Apr 2026</span>
           </div>
-        )}
+          {info && (
+            <div className="flex items-center gap-2 text-caption font-mono text-ink-faint">
+              <span className="source-pill">{info.embedder}</span>
+              <span>{info.docs} dokumen terindeks</span>
+            </div>
+          )}
+        </div>
       </div>
     </header>
   );

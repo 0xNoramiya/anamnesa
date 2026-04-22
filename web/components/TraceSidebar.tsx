@@ -33,24 +33,21 @@ export function TraceSidebar({ events, status }: Props) {
   }, [events]);
 
   return (
-    <aside className="flex flex-col h-full">
-      <header className="px-5 pt-6 pb-4 border-b border-paper-edge">
-        <div className="chapter-mark">Jejak Agen</div>
-        <div className="font-display text-2xl leading-tight text-ink">
-          Agent Trace
+    <aside className="flex flex-col h-full bg-paper-deep rounded-lg border border-paper-edge">
+      <header className="px-4 pt-4 pb-3 border-b border-paper-edge">
+        <div className="flex items-center justify-between">
+          <div className="chapter-mark">Jejak Agen</div>
+          <StatusChip status={status} />
         </div>
-        <p className="mt-2 text-caption text-ink-faint leading-snug max-w-[30ch]">
-          Setiap baris adalah satu keputusan agen.
-          Normalizer → Retriever → Drafter → Verifier.
+        <p className="mt-1.5 text-caption text-ink-faint leading-snug">
+          Normalizer → Retriever → Drafter → Verifier
         </p>
       </header>
 
-      <div className="flex-1 overflow-y-auto px-5 py-4 no-scrollbar">
-        {events.length === 0 && (
-          <EmptyState status={status} />
-        )}
+      <div className="flex-1 overflow-y-auto px-4 py-3 no-scrollbar">
+        {events.length === 0 && <EmptyState status={status} />}
         {events.length > 0 && (
-          <ol className="space-y-1.5">
+          <ol className="space-y-2">
             {events.map((ev, i) => (
               <TraceRow key={`${ev.timestamp}-${i}`} ev={ev} index={i} />
             ))}
@@ -59,20 +56,16 @@ export function TraceSidebar({ events, status }: Props) {
         )}
       </div>
 
-      <footer className="px-5 py-3 border-t border-paper-edge grid grid-cols-3 gap-3 text-[0.7rem] font-mono uppercase tracking-editorial text-ink-faint">
+      <footer className="px-4 py-2.5 border-t border-paper-edge grid grid-cols-2 gap-3 text-[0.7rem] font-mono uppercase tracking-editorial text-ink-faint">
         <div>
           <div>Events</div>
-          <div className="text-ink font-medium mt-0.5">{events.length}</div>
+          <div className="text-ink font-semibold mt-0.5 text-sm">{events.length}</div>
         </div>
         <div>
           <div>Tokens</div>
-          <div className="text-ink font-medium mt-0.5">
+          <div className="text-ink font-semibold mt-0.5 text-sm">
             {totals.tokens.toLocaleString()}
           </div>
-        </div>
-        <div>
-          <div>Status</div>
-          <StatusChip status={status} />
         </div>
       </footer>
     </aside>
@@ -81,38 +74,38 @@ export function TraceSidebar({ events, status }: Props) {
 
 function StatusChip({ status }: { status: StreamStatus }) {
   const label =
-    status === "idle"      ? "Siap" :
-    status === "submitting"? "Kirim" :
-    status === "streaming" ? "Alir" :
-    status === "done"      ? "Selesai" :
-                             "Error";
+    status === "idle" ? "Siap" :
+    status === "submitting" ? "Memulai" :
+    status === "streaming" ? "Berjalan" :
+    status === "done" ? "Selesai" :
+    "Error";
   const tone =
-    status === "streaming" ? "text-amber" :
-    status === "done"      ? "text-sage" :
-    status === "error"     ? "text-oxblood" :
-                             "text-ink-faint";
+    status === "streaming" ? "badge-aging" :
+    status === "done"      ? "badge-current" :
+    status === "error"     ? "badge-superseded" :
+                             "badge-unknown";
   return (
-    <div className={`font-medium mt-0.5 ${tone}`}>
-      {label}
+    <span className={`badge ${tone}`}>
       {status === "streaming" && (
-        <span className="ml-1 inline-block w-1.5 h-1.5 bg-amber animate-pulse" />
+        <span className="inline-block w-1.5 h-1.5 rounded-full bg-amber animate-pulse" />
       )}
-    </div>
+      {label}
+    </span>
   );
 }
 
 function EmptyState({ status }: { status: StreamStatus }) {
   return (
-    <div className="pt-10 flex flex-col items-start gap-3 text-ink-faint">
-      <div className="font-mono text-[0.72rem] uppercase tracking-editorial">
+    <div className="py-6 flex flex-col items-start gap-2 text-ink-faint">
+      <div className="font-mono text-[0.7rem] uppercase tracking-editorial">
         Menunggu kueri…
       </div>
       <p className="text-caption leading-relaxed max-w-[34ch]">
-        Ketik satu pertanyaan klinis di sebelah kiri. Anamnesa akan
-        menampilkan setiap langkah agen di panel ini, real time.
+        Ketik satu pertanyaan klinis. Anamnesa menampilkan setiap langkah
+        agen di sini, real time.
       </p>
       {status === "submitting" && (
-        <div className="text-caption text-amber font-mono">
+        <div className="text-caption text-civic font-mono mt-1">
           → membangun permintaan…
         </div>
       )}

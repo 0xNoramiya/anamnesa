@@ -4,125 +4,81 @@
 
 @layer base {
   html {
-    /* Warm paper background persists beyond body during iOS rubber-band. */
-    background-color: #FAF6EB;
+    background-color: #FAFAFA;
   }
   body {
     @apply bg-paper text-ink font-body text-body antialiased;
-    font-feature-settings: "ss01", "ss02", "cv11", "kern";
-    /* Paper grain — very subtle, behind everything. */
-    background-image:
-      radial-gradient(ellipse 120vw 80vh at 50% -10%, rgba(46, 75, 58, 0.04), transparent 60%),
-      theme("backgroundImage.grain");
-    background-attachment: fixed;
+    font-feature-settings: "ss01", "cv11", "kern";
   }
   ::selection {
-    background: #8B2332;
-    color: #FAF6EB;
+    background: #1E40AF;
+    color: #FAFAFA;
   }
-  /* Fraunces optical features — expose the distinctive serif quirks */
   .font-display {
-    font-variation-settings: "opsz" 144, "SOFT" 50, "WONK" 1;
-    font-feature-settings: "ss01", "ss02", "kern";
+    font-variation-settings: "opsz" 144, "SOFT" 30;
+    font-feature-settings: "kern";
+  }
+  /* Focus rings are a shared civic-tech concern — keep them visible. */
+  :focus-visible {
+    outline: 2px solid theme("colors.civic.DEFAULT");
+    outline-offset: 2px;
   }
 }
 
 @layer components {
-  /* Editorial rule — a thin line with a small square notch, Kepmenkes feel */
-  .rule {
-    @apply block w-full h-px bg-ink/20 relative;
-  }
-  .rule::before {
-    content: "";
-    position: absolute;
-    left: 0; top: -1px;
-    width: 3px; height: 3px;
-    background: theme("colors.ink.DEFAULT");
-  }
-  .rule::after {
-    content: "";
-    position: absolute;
-    right: 0; top: -1px;
-    width: 3px; height: 3px;
-    background: theme("colors.ink.DEFAULT");
-  }
-
-  /* Chapter mark — small caps label used for section titles */
+  /* Chapter mark — small caps label used for section headers */
   .chapter-mark {
     @apply font-mono uppercase text-caption tracking-editorial text-ink-faint;
   }
 
-  /* Drop cap — first letter of an answer body */
-  .drop-cap::first-letter {
-    @apply font-display;
-    float: left;
-    font-size: 4.25em;
-    line-height: 0.82;
-    padding-right: 0.08em;
-    padding-top: 0.02em;
-    color: theme("colors.oxblood.DEFAULT");
-    font-weight: 500;
-  }
-
-  /* Stamp — for aging/superseded/status badges */
-  .stamp {
-    @apply inline-flex items-center gap-1.5 px-2 py-0.5 font-mono uppercase text-caption tracking-editorial
+  /* Status badge — pasal.id-style tag for regulation currency */
+  .badge {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 font-mono uppercase
+           text-[0.68rem] tracking-editorial rounded-md
            border border-current;
   }
-  .stamp-aging {
-    @apply text-amber;
-  }
-  .stamp-superseded, .stamp-withdrawn {
-    @apply text-oxblood;
-  }
-  .stamp-current {
-    @apply text-sage;
-  }
-  .stamp-unknown {
-    @apply text-ink-faint;
+  .badge-current    { @apply text-sage    bg-sage/5; }
+  .badge-aging      { @apply text-amber   bg-amber/5; }
+  .badge-superseded { @apply text-oxblood bg-oxblood/5; }
+  .badge-withdrawn  { @apply text-oxblood bg-oxblood/10; }
+  .badge-unknown    { @apply text-ink-faint bg-paper-deep; }
+
+  /* Source-type badge — e.g. PNPK / PPK FKTP */
+  .source-pill {
+    @apply inline-flex items-center px-1.5 py-0.5 font-mono uppercase
+           text-[0.68rem] tracking-editorial rounded
+           bg-civic/10 text-civic border border-civic/20;
   }
 
   /* Inline citation — superscript numeric marker */
   .cite-marker {
     @apply inline-block font-mono text-[0.62em] align-super leading-none
-           text-oxblood border-b border-oxblood/40 pb-px cursor-pointer
-           transition-colors hover:text-oxblood-deep hover:border-oxblood;
-    padding: 0 0.1em;
+           text-civic cursor-pointer
+           transition-colors hover:text-civic-hover;
+    padding: 0 0.12em;
+  }
+  .cite-marker::before { content: "["; }
+  .cite-marker::after  { content: "]"; }
+
+  /* Document card — one per reference, pasal.id-style */
+  .doc-card {
+    @apply bg-white border border-paper-edge rounded-lg p-4
+           transition-shadow hover:shadow-card-hover;
   }
 
-  /* Trace event row — in the right-hand sidebar */
+  /* Trace event row */
   .trace-row {
-    @apply font-mono text-[0.76rem] leading-snug py-1.5 px-2 border-l-2
-           border-ink-faint/30 relative;
-    background: linear-gradient(90deg, transparent 0%, rgba(26,25,20,0.02) 100%);
+    @apply font-mono text-[0.76rem] leading-snug py-1.5 px-2.5 relative
+           rounded-md bg-white border border-paper-edge;
   }
-  .trace-row[data-agent="normalizer"] { @apply border-indigo; }
-  .trace-row[data-agent="retriever"]  { @apply border-sage; }
-  .trace-row[data-agent="drafter"]    { @apply border-amber; }
-  .trace-row[data-agent="verifier"]   { @apply border-oxblood; }
-  .trace-row[data-agent="orchestrator"] { @apply border-ink-faint; }
+  .trace-row[data-agent="normalizer"]   { box-shadow: inset 3px 0 0 theme("colors.civic.DEFAULT"); }
+  .trace-row[data-agent="retriever"]    { box-shadow: inset 3px 0 0 theme("colors.sage.DEFAULT"); }
+  .trace-row[data-agent="drafter"]      { box-shadow: inset 3px 0 0 theme("colors.amber.DEFAULT"); }
+  .trace-row[data-agent="verifier"]     { box-shadow: inset 3px 0 0 theme("colors.oxblood.DEFAULT"); }
+  .trace-row[data-agent="orchestrator"] { box-shadow: inset 3px 0 0 theme("colors.ink.ghost"); }
 }
 
 @layer utilities {
   .no-scrollbar::-webkit-scrollbar { display: none; }
   .no-scrollbar { scrollbar-width: none; }
-
-  /* Crop-mark corners — four tiny brackets at viewport corners */
-  .crop-corners::before,
-  .crop-corners::after {
-    content: "";
-    position: fixed;
-    width: 14px; height: 14px;
-    border-color: theme("colors.ink.DEFAULT");
-    pointer-events: none;
-    z-index: 30;
-  }
-  .crop-corners::before {
-    top: 12px; left: 12px;
-    border-top: 1px solid; border-left: 1px solid;
-  }
-  .crop-corners::after {
-    bottom: 12px; right: 12px;
-    border-bottom: 1px solid; border-right: 1px solid;
-  }
 }

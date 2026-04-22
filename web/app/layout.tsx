@@ -36,7 +36,7 @@ export default function RootLayout({
       lang="id"
       className={`${fraunces.variable} ${plexSans.variable} ${plexMono.variable}`}
     >
-      <body className="crop-corners min-h-screen">
+      <body className="min-h-screen">
         {children}
       </body>
     </html>
