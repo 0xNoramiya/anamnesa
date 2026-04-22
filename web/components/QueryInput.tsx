@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 import type { StreamStatus } from "@/lib/useQueryStream";
 
 interface Props {
@@ -14,15 +14,46 @@ const EXAMPLES = [
   "Luka bakar derajat II 30% TBSA dewasa. Cairan resusitasi 24 jam pertama?",
 ];
 
+const INPUT_TAGS = new Set(["INPUT", "TEXTAREA", "SELECT"]);
+
 export function QueryInput({ onSubmit, status }: Props) {
   const [value, setValue] = useState("");
   const busy = status === "submitting" || status === "streaming";
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  // Global shortcut: `/` focuses the query input (skipped while typing
+  // elsewhere). Mirrors GitHub / Linear / Notion and costs nothing for
+  // users who don't know it exists.
+  useEffect(() => {
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== "/") return;
+      if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey) return;
+      const target = e.target as HTMLElement | null;
+      if (!target) return;
+      const tag = target.tagName;
+      if (INPUT_TAGS.has(tag) || target.isContentEditable) return;
+      e.preventDefault();
+      textareaRef.current?.focus();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   const handleSubmit = (e: FormEvent) => {
     e.preventDefault();
     const q = value.trim();
     if (!q || busy) return;
     onSubmit(q);
+  };
+
+  const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    // Cmd/Ctrl+Enter submits even when the submit button isn't focused.
+    if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      const q = value.trim();
+      if (!q || busy) return;
+      onSubmit(q);
+    }
   };
 
   return (
@@ -34,8 +65,10 @@ export function QueryInput({ onSubmit, status }: Props) {
         <div className="bg-white border border-paper-edge rounded-lg shadow-card focus-within:shadow-card-hover transition-shadow">
           <textarea
             id="query"
+            ref={textareaRef}
             value={value}
             onChange={(e) => setValue(e.target.value)}
+            onKeyDown={handleKeyDown}
             disabled={busy}
             rows={3}
             placeholder="Tulis pertanyaan klinis dalam Bahasa Indonesia. Anamnesa mengutip pedoman Indonesia (Pasal 42 UU 28/2014 — domain publik)."
@@ -44,8 +77,14 @@ export function QueryInput({ onSubmit, status }: Props) {
                        placeholder:text-ink-ghost"
           />
           <div className="flex items-center justify-between px-4 py-2 border-t border-paper-edge">
-            <div className="text-caption text-ink-faint">
-              {value.length > 0 ? `${value.length} karakter` : "Tekan Cmd+Enter untuk kirim"}
+            <div className="text-caption text-ink-faint flex items-center gap-2">
+              {value.length > 0 ? (
+                <>{value.length} karakter</>
+              ) : (
+                <>
+                  Tekan <Kbd>/</Kbd> untuk fokus · <Kbd>⌘</Kbd><Kbd>↵</Kbd> untuk kirim
+                </>
+              )}
             </div>
             <button
               type="submit"
@@ -82,5 +121,17 @@ export function QueryInput({ onSubmit, status }: Props) {
         </div>
       )}
     </div>
+  );
+}
+
+function Kbd({ children }: { children: React.ReactNode }) {
+  return (
+    <kbd
+      className="inline-flex items-center justify-center min-w-[1.3em] h-[1.3em]
+                 px-1 rounded border border-paper-edge bg-white
+                 font-mono text-[0.7rem] text-ink-mid leading-none"
+    >
+      {children}
+    </kbd>
   );
 }
