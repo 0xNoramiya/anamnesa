@@ -261,11 +261,30 @@ function ReferenceCard({
   flag?: CurrencyFlag;
   onOpenPdf?: (docId: string, page: number) => void;
 }) {
+  const [copied, setCopied] = useState(false);
   const sourceType = citation.doc_id.startsWith("ppk-fktp")
     ? "PPK FKTP"
     : citation.doc_id.startsWith("pnpk")
     ? "PNPK"
     : "DOC";
+
+  const handleCopy = async () => {
+    const md = formatCitationMarkdown(citation, flag, sourceType);
+    try {
+      await navigator.clipboard.writeText(md);
+    } catch {
+      const ta = document.createElement("textarea");
+      ta.value = md;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand("copy"); } finally { ta.remove(); }
+    }
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1800);
+  };
+
   return (
     <article id={`ref-${citation.key}`} className="doc-card">
       <div className="flex items-start gap-3 mb-2">
@@ -287,7 +306,7 @@ function ReferenceCard({
           <blockquote className="mt-2.5 pl-3 border-l-2 border-paper-edge text-ink-mid text-body leading-relaxed">
             {truncate(citation.chunk_text, 340)}
           </blockquote>
-          <div className="mt-3 flex items-center gap-3">
+          <div className="mt-3 flex items-center gap-2 flex-wrap">
             <button
               type="button"
               onClick={() => onOpenPdf?.(citation.doc_id, citation.page)}
@@ -303,11 +322,53 @@ function ReferenceCard({
               </svg>
               Lihat PDF, hal {citation.page}
             </button>
+            <button
+              type="button"
+              onClick={handleCopy}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md
+                         border border-paper-edge text-ink-mid
+                         text-caption font-medium
+                         hover:border-civic/30 hover:text-civic
+                         transition-colors"
+              title="Salin kutipan + sumber ke clipboard"
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none"
+                   stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <rect width="14" height="14" x="8" y="8" rx="2" />
+                <path d="M4 16V4a2 2 0 0 1 2-2h10" />
+              </svg>
+              {copied ? "Tersalin ✓" : "Salin kutipan"}
+            </button>
           </div>
         </div>
       </div>
     </article>
   );
+}
+
+function formatCitationMarkdown(
+  citation: Citation,
+  flag: CurrencyFlag | undefined,
+  sourceType: string,
+): string {
+  const currency = flag
+    ? ` · ${
+        flag.status === "aging"
+          ? "⚠ Aging"
+          : flag.status === "superseded"
+            ? `⚠ Superseded → ${flag.superseding_doc_id ?? "?"}`
+            : flag.status === "withdrawn"
+              ? "⚠ Withdrawn"
+              : flag.status === "current"
+                ? "✓ Current"
+                : flag.status
+      } · ${flag.source_year}`
+    : "";
+  const body = (citation.chunk_text ?? "").replace(/\s+/g, " ").trim();
+  return [
+    `**${citation.doc_id}** · hal ${citation.page} · ${sourceType}${currency}`,
+    `> ${body}`,
+  ].join("\n");
 }
 
 function CurrencyBadge({ flag }: { flag: CurrencyFlag }) {
