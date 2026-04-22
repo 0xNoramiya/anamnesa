@@ -111,7 +111,11 @@ export default function HomePage() {
 
               {stream.final && (
                 <div className="mt-10">
-                  <AnswerPanel final={stream.final} onOpenPdf={openPdf} />
+                  <AnswerPanel
+                    final={stream.final}
+                    queryText={currentQueryRef.current}
+                    onOpenPdf={openPdf}
+                  />
                 </div>
               )}
 

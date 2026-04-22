@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type {
   Citation,
   CurrencyFlag,
@@ -7,15 +8,23 @@ import type {
   RetrievalHint,
 } from "@/lib/types";
 import { REFUSAL_MESSAGES_ID } from "@/lib/refusalMessages";
+import {
+  buildAnswerMarkdown,
+  downloadText,
+  suggestedFilename,
+} from "@/lib/exportMarkdown";
 
 interface Props {
   final: FinalResponse | null;
+  queryText?: string;
   onOpenPdf?: (docId: string, page: number) => void;
 }
 
-export function AnswerPanel({ final, onOpenPdf }: Props) {
+export function AnswerPanel({ final, queryText, onOpenPdf }: Props) {
   if (!final) return null;
-  if (final.refusal_reason) return <Refusal final={final} onOpenPdf={onOpenPdf} />;
+  if (final.refusal_reason) {
+    return <Refusal final={final} queryText={queryText} onOpenPdf={onOpenPdf} />;
+  }
 
   const citations = final.citations;
   const flagsByKey = new Map<string, CurrencyFlag>(
@@ -39,6 +48,8 @@ export function AnswerPanel({ final, onOpenPdf }: Props) {
       </div>
 
       {final.from_cache && <CacheBadge ageSeconds={final.cached_age_s ?? null} />}
+
+      <ExportActions final={final} queryText={queryText} />
 
       <BodyProse content={final.answer_markdown} indexByKey={indexByKey} />
 
@@ -324,9 +335,11 @@ function truncate(s: string, n: number): string {
 
 function Refusal({
   final,
+  queryText,
   onOpenPdf,
 }: {
   final: FinalResponse;
+  queryText?: string;
   onOpenPdf?: (docId: string, page: number) => void;
 }) {
   const reason = final.refusal_reason!;
@@ -340,6 +353,8 @@ function Refusal({
         <span className="chapter-mark text-oxblood">{reason}</span>
       </div>
       {final.from_cache && <CacheBadge ageSeconds={final.cached_age_s ?? null} />}
+
+      <ExportActions final={final} queryText={queryText} />
 
       <div className="bg-oxblood/5 border border-oxblood/20 rounded-lg p-5">
         <p className="text-body-lg leading-relaxed text-ink">{msg}</p>
@@ -427,6 +442,83 @@ function Disclaimer() {
         Keputusan klinis tetap menjadi tanggung jawab dokter.
       </p>
     </footer>
+  );
+}
+
+function ExportActions({
+  final,
+  queryText,
+}: {
+  final: FinalResponse;
+  queryText?: string;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  const buildMd = () => buildAnswerMarkdown(queryText ?? "", final);
+
+  const handleCopy = async () => {
+    const md = buildMd();
+    try {
+      await navigator.clipboard.writeText(md);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch {
+      // Clipboard API failed (iframe without permission, http page, etc.)
+      // — fall back to selecting + execCommand.
+      const ta = document.createElement("textarea");
+      ta.value = md;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand("copy");
+        setCopied(true);
+        setTimeout(() => setCopied(false), 1800);
+      } finally {
+        ta.remove();
+      }
+    }
+  };
+
+  const handleDownload = () => {
+    downloadText(suggestedFilename(), buildMd());
+  };
+
+  return (
+    <div className="mb-5 flex items-center gap-2">
+      <button
+        type="button"
+        onClick={handleCopy}
+        className="inline-flex items-center gap-1.5 text-caption font-mono
+                   uppercase tracking-editorial text-ink-mid hover:text-civic
+                   hover:bg-paper-deep px-2.5 py-1.5 rounded-md transition-colors"
+        title="Salin jawaban (Markdown) ke clipboard"
+      >
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <rect width="14" height="14" x="8" y="8" rx="2" />
+          <path d="M4 16V4a2 2 0 0 1 2-2h10" />
+        </svg>
+        {copied ? "Tersalin ✓" : "Salin"}
+      </button>
+      <button
+        type="button"
+        onClick={handleDownload}
+        className="inline-flex items-center gap-1.5 text-caption font-mono
+                   uppercase tracking-editorial text-ink-mid hover:text-civic
+                   hover:bg-paper-deep px-2.5 py-1.5 rounded-md transition-colors"
+        title="Unduh sebagai berkas .md"
+      >
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M12 3v12" />
+          <polyline points="7 10 12 15 17 10" />
+          <path d="M5 21h14" />
+        </svg>
+        Unduh .md
+      </button>
+    </div>
   );
 }
 
