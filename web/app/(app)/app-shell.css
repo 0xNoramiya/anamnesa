@@ -1,0 +1,43 @@
+/* App shell — sidebar + main at desktop, stacked + bottom tabs at mobile.
+ * Tailwind is available but this layout is small and touches a lot of
+ * flex/min-height edge cases; keeping it as a standalone stylesheet
+ * makes it trivial to audit. */
+
+.shell-root {
+  display: flex;
+  min-height: 100vh;
+  background: var(--paper);
+  color: var(--ink);
+}
+
+.shell-sidebar {
+  display: none;
+}
+
+.shell-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.shell-main-inner {
+  flex: 1;
+  min-width: 0;
+}
+
+.shell-mobile-tabs {
+  display: block;
+}
+
+@media (min-width: 768px) {
+  .shell-sidebar {
+    display: block;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+  }
+  .shell-mobile-tabs {
+    display: none;
+  }
+}

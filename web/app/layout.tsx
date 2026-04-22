@@ -1,6 +1,7 @@
 import "./globals.css";
 import type { Metadata } from "next";
 import { Fraunces, IBM_Plex_Sans, IBM_Plex_Mono } from "next/font/google";
+import { ThemeProvider } from "@/components/shell/ThemeProvider";
 
 const fraunces = Fraunces({
   subsets: ["latin"],
@@ -35,9 +36,10 @@ export default function RootLayout({
     <html
       lang="id"
       className={`${fraunces.variable} ${plexSans.variable} ${plexMono.variable}`}
+      suppressHydrationWarning
     >
       <body className="min-h-screen">
-        {children}
+        <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>
   );
