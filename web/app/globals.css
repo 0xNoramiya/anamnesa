@@ -1,0 +1,128 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    /* Warm paper background persists beyond body during iOS rubber-band. */
+    background-color: #FAF6EB;
+  }
+  body {
+    @apply bg-paper text-ink font-body text-body antialiased;
+    font-feature-settings: "ss01", "ss02", "cv11", "kern";
+    /* Paper grain — very subtle, behind everything. */
+    background-image:
+      radial-gradient(ellipse 120vw 80vh at 50% -10%, rgba(46, 75, 58, 0.04), transparent 60%),
+      theme("backgroundImage.grain");
+    background-attachment: fixed;
+  }
+  ::selection {
+    background: #8B2332;
+    color: #FAF6EB;
+  }
+  /* Fraunces optical features — expose the distinctive serif quirks */
+  .font-display {
+    font-variation-settings: "opsz" 144, "SOFT" 50, "WONK" 1;
+    font-feature-settings: "ss01", "ss02", "kern";
+  }
+}
+
+@layer components {
+  /* Editorial rule — a thin line with a small square notch, Kepmenkes feel */
+  .rule {
+    @apply block w-full h-px bg-ink/20 relative;
+  }
+  .rule::before {
+    content: "";
+    position: absolute;
+    left: 0; top: -1px;
+    width: 3px; height: 3px;
+    background: theme("colors.ink.DEFAULT");
+  }
+  .rule::after {
+    content: "";
+    position: absolute;
+    right: 0; top: -1px;
+    width: 3px; height: 3px;
+    background: theme("colors.ink.DEFAULT");
+  }
+
+  /* Chapter mark — small caps label used for section titles */
+  .chapter-mark {
+    @apply font-mono uppercase text-caption tracking-editorial text-ink-faint;
+  }
+
+  /* Drop cap — first letter of an answer body */
+  .drop-cap::first-letter {
+    @apply font-display;
+    float: left;
+    font-size: 4.25em;
+    line-height: 0.82;
+    padding-right: 0.08em;
+    padding-top: 0.02em;
+    color: theme("colors.oxblood.DEFAULT");
+    font-weight: 500;
+  }
+
+  /* Stamp — for aging/superseded/status badges */
+  .stamp {
+    @apply inline-flex items-center gap-1.5 px-2 py-0.5 font-mono uppercase text-caption tracking-editorial
+           border border-current;
+  }
+  .stamp-aging {
+    @apply text-amber;
+  }
+  .stamp-superseded, .stamp-withdrawn {
+    @apply text-oxblood;
+  }
+  .stamp-current {
+    @apply text-sage;
+  }
+  .stamp-unknown {
+    @apply text-ink-faint;
+  }
+
+  /* Inline citation — superscript numeric marker */
+  .cite-marker {
+    @apply inline-block font-mono text-[0.62em] align-super leading-none
+           text-oxblood border-b border-oxblood/40 pb-px cursor-pointer
+           transition-colors hover:text-oxblood-deep hover:border-oxblood;
+    padding: 0 0.1em;
+  }
+
+  /* Trace event row — in the right-hand sidebar */
+  .trace-row {
+    @apply font-mono text-[0.76rem] leading-snug py-1.5 px-2 border-l-2
+           border-ink-faint/30 relative;
+    background: linear-gradient(90deg, transparent 0%, rgba(26,25,20,0.02) 100%);
+  }
+  .trace-row[data-agent="normalizer"] { @apply border-indigo; }
+  .trace-row[data-agent="retriever"]  { @apply border-sage; }
+  .trace-row[data-agent="drafter"]    { @apply border-amber; }
+  .trace-row[data-agent="verifier"]   { @apply border-oxblood; }
+  .trace-row[data-agent="orchestrator"] { @apply border-ink-faint; }
+}
+
+@layer utilities {
+  .no-scrollbar::-webkit-scrollbar { display: none; }
+  .no-scrollbar { scrollbar-width: none; }
+
+  /* Crop-mark corners — four tiny brackets at viewport corners */
+  .crop-corners::before,
+  .crop-corners::after {
+    content: "";
+    position: fixed;
+    width: 14px; height: 14px;
+    border-color: theme("colors.ink.DEFAULT");
+    pointer-events: none;
+    z-index: 30;
+  }
+  .crop-corners::before {
+    top: 12px; left: 12px;
+    border-top: 1px solid; border-left: 1px solid;
+  }
+  .crop-corners::after {
+    bottom: 12px; right: 12px;
+    border-bottom: 1px solid; border-right: 1px solid;
+  }
+}

@@ -63,8 +63,20 @@ class Orchestrator:
         self.verifier = verifier
         self.limits = limits or BudgetLimits()
 
-    async def run(self, user_query: str) -> QueryState:
-        state = QueryState(original_query=user_query)
+    async def run(
+        self,
+        user_query: str,
+        *,
+        state: QueryState | None = None,
+    ) -> QueryState:
+        """Drive a single query through the agent loop.
+
+        `state` may be pre-constructed by a caller that needs a live handle
+        to the state (e.g. the SSE server watching `state.trace_events`
+        for stream events). If omitted, a fresh state is built here.
+        """
+        if state is None:
+            state = QueryState(original_query=user_query)
         budget = BudgetTracker(self.limits)
         started = time.monotonic()
 
