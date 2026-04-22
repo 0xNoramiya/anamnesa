@@ -54,6 +54,17 @@ export type RefusalReason =
   | "wall_clock_exhausted"
   | "normalizer_malformed";
 
+export interface RetrievalHint {
+  doc_id: string;
+  page: number;
+  section_slug: string;
+  section_path: string;
+  text_preview: string;
+  year: number;
+  source_type: string;
+  score: number;
+}
+
 export interface FinalResponse {
   query_id: string;
   answer_markdown: string;
@@ -63,6 +74,7 @@ export interface FinalResponse {
   refusal_reason: RefusalReason | null;
   from_cache?: boolean;
   cached_age_s?: number | null;
+  retrieval_preview?: RetrievalHint[];
 }
 
 export interface QueryCreated {

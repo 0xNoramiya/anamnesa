@@ -241,6 +241,27 @@ class CostLedger(BaseModel):
         self.model_calls[agent] = self.model_calls.get(agent, 0) + 1
 
 
+class RetrievalHint(BaseModel):
+    """A lightweight chunk summary surfaced on corpus-silent refusals.
+
+    The user sees: "Anamnesa searched and found these documents, but none
+    were judged relevant to your question." This converts a dead-end
+    refusal into a useful pointer — the user can click through the PDF
+    of a near-miss guideline and make their own call.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    doc_id: str
+    page: int
+    section_slug: str
+    section_path: str
+    text_preview: str              # first ~200 chars, whitespace-collapsed
+    year: int
+    source_type: str
+    score: float                   # fusion score from the retriever
+
+
 class FinalResponse(BaseModel):
     model_config = ConfigDict(frozen=True)
 
@@ -252,6 +273,11 @@ class FinalResponse(BaseModel):
     refusal_reason: RefusalReason | None = None  # set iff this is a refusal
     from_cache: bool = False       # True iff replayed from the answer cache
     cached_age_s: float | None = None  # cache entry age at replay time
+    retrieval_preview: list[RetrievalHint] = Field(default_factory=list)
+    # Populated on "retrieval ran but refused" reasons (corpus_silent,
+    # all_superseded_no_current, citations_unverifiable). Empty on
+    # refusals that never ran retrieval (out_of_scope, patient_specific)
+    # and on successful answers (citations carry the grounding there).
 
 
 # ---------------------------------------------------------------------------

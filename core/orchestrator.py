@@ -39,6 +39,7 @@ from core.state import (
     FinalResponse,
     QueryState,
     RetrievalFilters,
+    RetrievalHint,
     VerificationResult,
 )
 from core.trace import trace
@@ -426,6 +427,7 @@ class Orchestrator:
             citations=[],
             currency_flags=[],
             refusal_reason=reason,
+            retrieval_preview=_build_retrieval_preview(state, reason),
         )
         self._store_in_cache(state)
         state.append_trace(
@@ -457,3 +459,47 @@ def _assemble_success(state: QueryState) -> FinalResponse:
         citations=citations,
         currency_flags=flags,
     )
+
+
+# Refusal reasons that ARE a result of the retriever+drafter finding no
+# grounded answer. Showing the near-miss chunks to the user is useful
+# here. Out-of-scope + patient-specific refusals never run retrieval so
+# there's nothing to show. Budget/verifier exhaustion can have chunks
+# but they're noisy — skip.
+_PREVIEW_REFUSAL_REASONS = frozenset(
+    {
+        RefusalReason.CORPUS_SILENT,
+        RefusalReason.ALL_SUPERSEDED_NO_CURRENT,
+        RefusalReason.CITATIONS_UNVERIFIABLE,
+    }
+)
+_RETRIEVAL_PREVIEW_MAX = 3
+_RETRIEVAL_PREVIEW_CHARS = 220
+
+
+def _build_retrieval_preview(
+    state: QueryState, reason: RefusalReason
+) -> list[RetrievalHint]:
+    if reason not in _PREVIEW_REFUSAL_REASONS:
+        return []
+    latest = state.latest_retrieval
+    if latest is None or not latest.chunks:
+        return []
+    preview: list[RetrievalHint] = []
+    for chunk in latest.chunks[:_RETRIEVAL_PREVIEW_MAX]:
+        text = " ".join(chunk.text.split())
+        if len(text) > _RETRIEVAL_PREVIEW_CHARS:
+            text = text[: _RETRIEVAL_PREVIEW_CHARS - 1] + "…"
+        preview.append(
+            RetrievalHint(
+                doc_id=chunk.doc_id,
+                page=chunk.page,
+                section_slug=chunk.section_slug,
+                section_path=chunk.section_path,
+                text_preview=text,
+                year=chunk.year,
+                source_type=chunk.source_type,
+                score=chunk.score,
+            )
+        )
+    return preview

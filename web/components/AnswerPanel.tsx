@@ -1,6 +1,11 @@
 "use client";
 
-import type { Citation, CurrencyFlag, FinalResponse } from "@/lib/types";
+import type {
+  Citation,
+  CurrencyFlag,
+  FinalResponse,
+  RetrievalHint,
+} from "@/lib/types";
 import { REFUSAL_MESSAGES_ID } from "@/lib/refusalMessages";
 
 interface Props {
@@ -10,7 +15,7 @@ interface Props {
 
 export function AnswerPanel({ final, onOpenPdf }: Props) {
   if (!final) return null;
-  if (final.refusal_reason) return <Refusal final={final} />;
+  if (final.refusal_reason) return <Refusal final={final} onOpenPdf={onOpenPdf} />;
 
   const citations = final.citations;
   const flagsByKey = new Map<string, CurrencyFlag>(
@@ -317,9 +322,16 @@ function truncate(s: string, n: number): string {
   return clean.length > n ? clean.slice(0, n - 1) + "…" : clean;
 }
 
-function Refusal({ final }: { final: FinalResponse }) {
+function Refusal({
+  final,
+  onOpenPdf,
+}: {
+  final: FinalResponse;
+  onOpenPdf?: (docId: string, page: number) => void;
+}) {
   const reason = final.refusal_reason!;
   const msg = REFUSAL_MESSAGES_ID[reason] ?? final.answer_markdown;
+  const hints = final.retrieval_preview ?? [];
   return (
     <article className="animate-fade-in-up">
       <div className="flex items-center gap-3 mb-3">
@@ -333,8 +345,73 @@ function Refusal({ final }: { final: FinalResponse }) {
           Anamnesa menolak menghasilkan jawaban tanpa dasar pedoman.
         </p>
       </div>
+
+      {hints.length > 0 && (
+        <section className="mt-8">
+          <div className="flex items-center gap-3 mb-3">
+            <span className="chapter-mark text-ink-mid">Hasil Pencarian</span>
+            <span className="flex-1 h-px bg-paper-edge" />
+            <span className="chapter-mark text-ink-faint">
+              {hints.length} dokumen
+            </span>
+          </div>
+          <p className="text-body text-ink-mid leading-relaxed mb-4 max-w-[62ch]">
+            Mesin pencari menemukan dokumen berikut, namun Drafter menilai
+            isinya tidak cukup untuk menjawab pertanyaan secara aman. Anda
+            dapat membuka PDF-nya untuk menilai sendiri.
+          </p>
+          <div className="space-y-2.5">
+            {hints.map((h, i) => (
+              <HintCard key={`${h.doc_id}-${h.page}-${i}`} hint={h} onOpenPdf={onOpenPdf} />
+            ))}
+          </div>
+        </section>
+      )}
+
       <Disclaimer />
     </article>
+  );
+}
+
+function HintCard({
+  hint,
+  onOpenPdf,
+}: {
+  hint: RetrievalHint;
+  onOpenPdf?: (docId: string, page: number) => void;
+}) {
+  const sourceType = hint.source_type
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+  return (
+    <button
+      type="button"
+      onClick={() => onOpenPdf?.(hint.doc_id, hint.page)}
+      disabled={!onOpenPdf}
+      className="w-full text-left bg-white border border-paper-edge rounded-lg
+                 p-4 hover:border-civic/40 hover:shadow-card disabled:cursor-default
+                 disabled:hover:border-paper-edge disabled:hover:shadow-none
+                 transition-all group"
+    >
+      <div className="flex items-center gap-2 flex-wrap">
+        <span className="source-pill shrink-0">{sourceType}</span>
+        <span className="font-mono text-caption text-ink-mid truncate">
+          {hint.doc_id}
+        </span>
+        <span className="text-ink-ghost text-caption">·</span>
+        <span className="text-caption text-ink-faint">hal {hint.page}</span>
+        <span className="text-ink-ghost text-caption">·</span>
+        <span className="text-caption text-ink-faint">{hint.year}</span>
+        {onOpenPdf && (
+          <span className="ml-auto text-caption text-civic opacity-0 group-hover:opacity-100 transition-opacity">
+            Buka PDF →
+          </span>
+        )}
+      </div>
+      <p className="mt-2 text-body text-ink-mid leading-relaxed line-clamp-3">
+        {hint.text_preview}
+      </p>
+    </button>
   );
 }
 
