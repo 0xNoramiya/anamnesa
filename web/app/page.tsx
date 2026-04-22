@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Masthead } from "@/components/Masthead";
+import { AppFooter } from "@/components/AppFooter";
 import { QueryInput } from "@/components/QueryInput";
 import { AnswerPanel } from "@/components/AnswerPanel";
 import { HistoryPanel } from "@/components/HistoryPanel";
@@ -134,6 +135,7 @@ export default function HomePage() {
           </div>
         )}
       </div>
+      <AppFooter />
       <PdfViewer
         docId={pdf?.docId ?? null}
         page={pdf?.page ?? 1}

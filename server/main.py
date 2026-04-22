@@ -121,10 +121,12 @@ async def _lifespan(app: FastAPI):
     app.state.cache = cache           # exposed for /api/cache/* admin endpoints
     app.state.running_queries = {}    # query_id -> asyncio.Queue
     app.state.tasks = set()           # strong refs to in-flight background tasks
+    app.state.version = _detect_version()  # git sha + date; stable at boot
     log.info(
         "anamnesa.boot",
         docs=len(manifest.documents),
         cache_enabled=cache is not None,
+        version_sha=app.state.version.get("sha", "dev"),
     )
     yield
     if cache is not None:
@@ -171,6 +173,67 @@ async def health() -> dict[str, Any]:
         "status": "ok",
         "docs_indexed": len(manifest.documents),
         "embedder": os.getenv("ANAMNESA_EMBEDDER", "hash"),
+    }
+
+
+@app.get("/api/meta")
+async def meta() -> dict[str, Any]:
+    """Compact build + corpus + cache summary — fetched by the web footer
+    so every page shows what it's actually running against. Cached at
+    boot for version; cache stats are live."""
+    manifest: Manifest = app.state.manifest
+    hybrid = app.state.hybrid
+    cache: AnswerCache | None = getattr(app.state, "cache", None)
+
+    # Corpus year range — loop is cheap, 80 entries.
+    years = [d.year for d in manifest.documents if d.year]
+    year_min = min(years) if years else None
+    year_max = max(years) if years else None
+
+    # Chunk count — prefer the BM25-backed store since it's authoritative
+    # for what's actually queryable.
+    try:
+        chunk_count = int(len(getattr(hybrid, "_bm25_chunks", []) or []))
+    except Exception:
+        chunk_count = 0
+
+    cache_stats = cache.stats() if cache is not None else None
+
+    return {
+        "version": app.state.version,
+        "corpus": {
+            "docs": len(manifest.documents),
+            "chunks": chunk_count,
+            "year_min": year_min,
+            "year_max": year_max,
+            "embedder": os.getenv("ANAMNESA_EMBEDDER", "hash"),
+        },
+        "cache": cache_stats,
+        "legal_basis": "UU No. 28/2014 Pasal 42",
+    }
+
+
+def _detect_version() -> dict[str, str]:
+    """Read the git HEAD sha + date at boot. Falls back to 'dev' on any
+    failure (non-git checkout, no git binary, detached HEAD, etc.)."""
+    import subprocess
+
+    def _run(cmd: list[str]) -> str | None:
+        try:
+            out = subprocess.check_output(
+                cmd, cwd=os.path.dirname(__file__) or ".", stderr=subprocess.DEVNULL
+            )
+            return out.decode("utf-8", errors="replace").strip() or None
+        except Exception:
+            return None
+
+    sha = _run(["git", "rev-parse", "--short=12", "HEAD"]) or "dev"
+    date = _run(["git", "log", "-1", "--format=%cI", "HEAD"]) or ""
+    subject = _run(["git", "log", "-1", "--format=%s", "HEAD"]) or ""
+    return {
+        "sha": sha,
+        "date": date,
+        "subject": subject[:120],
     }
 
 
