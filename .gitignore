@@ -21,6 +21,10 @@ htmlcov/
 .env.local
 .env.*.local
 
+# Ad-hoc deploy helper — contains VPS host/creds via env-var fallbacks.
+# Keep local-only; do not commit.
+scripts/deploy_helper.py
+
 # Anamnesa artifacts — regenerable, don't commit
 index/lance/
 index/bm25.pkl
