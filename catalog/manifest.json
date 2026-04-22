@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-04-22T09:28:45.930615Z",
+  "generated_at": "2026-04-22T10:16:17.249216Z",
   "documents": [
     {
       "doc_id": "pnpk-dengue-dewasa-2020",
@@ -1688,7 +1688,7 @@
       "superseded_by": [],
       "discovered_at": "2026-04-22T09:09:31.296784Z",
       "discovered_by": "manual/idi-semarang",
-      "notes": "chunks=1882, lampiran_ii_deferred"
+      "notes": "chunks=2500, lampiran_ii_chunks=621"
     }
   ]
 }

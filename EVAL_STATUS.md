@@ -44,7 +44,8 @@ are in `eval/run_eval.py` and written to `eval/results/` per run
 ## Corpus at 20/20
 
 - **80 documents ingested** across `ppk_fktp` (2 editions — 2015
-  superseded by 2022) and `pnpk` (78). Total **8,246 chunks**.
+  superseded by 2022, both Lampiran I+II now) and `pnpk` (78).
+  Total **8,864 chunks**.
 - **BGE-M3 / LanceDB** retrieval index with rank-bm25 sidecar,
   reciprocal-rank fusion, 1,024-dim vectors.
 - Live on `https://anamnesa.kudaliar.id` with Let's Encrypt TLS.
@@ -57,9 +58,17 @@ are in `eval/run_eval.py` and written to `eval/results/` per run
 - **Total typical: $0.40 – 0.80.** Over CLAUDE.md's $0.20 target but
   acceptable for the hackathon demo shape.
 
+## Skill coverage (Lampiran II, added 2026-04-22)
+
+`ppk-fktp-2022` now also indexes **Lampiran II — Panduan Keterampilan
+Klinis**: 19 skill categories × ~194 individual skills × ~5 sub-sections
+each = **621 new chunks** (hand hygiene, aseptic/antiseptic prinsip,
+APD, RJP, pemasangan kateter urin, NGT, hecting, drainase abses, dll.).
+Retrieval now answers procedural queries that the earlier Lampiran-I-
+only index could not. Total ppk-fktp-2022 chunk count: **2,500**.
+Corpus-wide: **8,864 chunks** across 80 documents.
+
 ## What's still gated on manual work
 
-- Lampiran II (Keterampilan Klinis) of PPK FKTP 2022 — procedural
-  skills, deferred.
 - Perhimpunan konsensus not adopted as PNPK — copyrighted, out of
   Pasal 42 scope.
