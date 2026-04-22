@@ -250,6 +250,8 @@ class FinalResponse(BaseModel):
     currency_flags: list[CurrencyFlag]
     disclaimer_id: str = "anamnesa.disclaimer.v1"
     refusal_reason: RefusalReason | None = None  # set iff this is a refusal
+    from_cache: bool = False       # True iff replayed from the answer cache
+    cached_age_s: float | None = None  # cache entry age at replay time
 
 
 # ---------------------------------------------------------------------------

@@ -61,6 +61,8 @@ export interface FinalResponse {
   currency_flags: CurrencyFlag[];
   disclaimer_id: string;
   refusal_reason: RefusalReason | null;
+  from_cache?: boolean;
+  cached_age_s?: number | null;
 }
 
 export interface QueryCreated {

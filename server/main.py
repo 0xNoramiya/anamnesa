@@ -67,6 +67,7 @@ async def _lifespan(app: FastAPI):
     from agents.normalizer import HaikuNormalizer
     from agents.verifier import OpusVerifier
     from core.budget import BudgetLimits
+    from core.cache import DEFAULT_TTL_SECONDS, AnswerCache
     from core.retrieval import default_retriever
     from mcp.client import LocalRetriever
 
@@ -78,6 +79,15 @@ async def _lifespan(app: FastAPI):
 
     hybrid = default_retriever()
     retriever = LocalRetriever(retriever=hybrid)
+
+    cache: AnswerCache | None = None
+    if os.getenv("ANAMNESA_CACHE_DISABLED", "").lower() not in ("1", "true", "yes"):
+        cache_path = Path(
+            os.getenv("ANAMNESA_CACHE_PATH", "catalog/cache/answers.db")
+        )
+        cache_ttl = int(os.getenv("ANAMNESA_CACHE_TTL_S", DEFAULT_TTL_SECONDS))
+        cache = AnswerCache(cache_path, ttl_seconds=cache_ttl)
+
     orchestrator = Orchestrator(
         normalizer=HaikuNormalizer(
             model_id=os.getenv("ANAMNESA_MODEL_NORMALIZER", "claude-haiku-4-5-20251001"),
@@ -89,14 +99,17 @@ async def _lifespan(app: FastAPI):
             api_key=api_key,
             retriever=retriever,
             thinking_budget=int(os.getenv("ANAMNESA_DRAFTER_THINKING_BUDGET", 8000)),
+            effort=os.getenv("ANAMNESA_DRAFTER_EFFORT", "xhigh"),
         ),
         verifier=OpusVerifier(
             model_id=os.getenv("ANAMNESA_MODEL_VERIFIER", "claude-opus-4-7"),
             api_key=api_key,
             retriever=retriever,
             thinking_budget=int(os.getenv("ANAMNESA_VERIFIER_THINKING_BUDGET", 12000)),
+            effort=os.getenv("ANAMNESA_VERIFIER_EFFORT", "xhigh"),
         ),
         limits=BudgetLimits.from_env(),
+        cache=cache,
     )
 
     # Lifespan runs once at boot — sync filesystem I/O here is fine.
@@ -105,10 +118,17 @@ async def _lifespan(app: FastAPI):
     app.state.orchestrator = orchestrator
     app.state.hybrid = hybrid         # exposed for /api/search (fast mode)
     app.state.manifest = manifest
+    app.state.cache = cache           # exposed for /api/cache/* admin endpoints
     app.state.running_queries = {}    # query_id -> asyncio.Queue
     app.state.tasks = set()           # strong refs to in-flight background tasks
-    log.info("anamnesa.boot", docs=len(manifest.documents))
+    log.info(
+        "anamnesa.boot",
+        docs=len(manifest.documents),
+        cache_enabled=cache is not None,
+    )
     yield
+    if cache is not None:
+        cache.close()
 
 
 app = FastAPI(title="Anamnesa", version="0.1.0", lifespan=_lifespan)

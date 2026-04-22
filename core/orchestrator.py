@@ -27,6 +27,7 @@ from agents.base import (
     Verifier,
 )
 from core.budget import BudgetExceededError, BudgetLimits, BudgetTracker
+from core.cache import AnswerCache, cache_key
 from core.refusals import RefusalReason, message_for
 from core.state import (
     Citation,
@@ -56,12 +57,14 @@ class Orchestrator:
         drafter: Drafter,
         verifier: Verifier,
         limits: BudgetLimits | None = None,
+        cache: AnswerCache | None = None,
     ) -> None:
         self.normalizer = normalizer
         self.retriever = retriever
         self.drafter = drafter
         self.verifier = verifier
         self.limits = limits or BudgetLimits()
+        self.cache = cache
 
     async def run(
         self,
@@ -85,6 +88,11 @@ class Orchestrator:
         )
 
         try:
+            # Fast path: answer cache keyed on the raw user query. Lives
+            # BEFORE normalize so a hit skips every LLM call — Haiku too.
+            if self._try_serve_from_cache(state, started):
+                return state
+
             await self._normalize(state)
             if state.refusal_reason is not None:
                 return self._finalize_refusal(state, budget, started)
@@ -298,6 +306,91 @@ class Orchestrator:
             thinking_tokens=int(usage.get("thinking_tokens", 0) or 0),
         )
 
+    # -------------------------------------------------------------------- cache
+
+    def _try_serve_from_cache(self, state: QueryState, started: float) -> bool:
+        """Look up the raw user query in the answer cache. Returns True
+        iff a hit was replayed into `state` (caller should return).
+
+        Replay semantics: emit a `cache_hit` trace, then replay the cached
+        trace events verbatim (so the SSE stream looks identical to a live
+        run), rebind `query_id` / `from_cache` on the FinalResponse.
+        """
+        if self.cache is None:
+            return False
+        key = cache_key(state.original_query)
+        hit = self.cache.get(key)
+        if hit is None:
+            return False
+
+        state.append_trace(
+            trace(
+                "orchestrator",
+                "cache_hit",
+                payload={
+                    "key": key,
+                    "age_s": round(hit.age_seconds, 1),
+                    "cached_refusal": (
+                        hit.final_response.refusal_reason.value
+                        if hit.final_response.refusal_reason
+                        else None
+                    ),
+                },
+            )
+        )
+        # Replay the cached trace events so the UI renders the full run
+        # shape (retriever → drafter → verifier) instead of an empty trace.
+        for ev in hit.trace_events:
+            state.append_trace(ev)
+
+        # Rebind query_id + cache markers onto the stored FinalResponse.
+        state.final_response = hit.final_response.model_copy(
+            update={
+                "query_id": state.query_id,
+                "from_cache": True,
+                "cached_age_s": round(hit.age_seconds, 1),
+            }
+        )
+        if hit.final_response.refusal_reason is not None:
+            state.refusal_reason = hit.final_response.refusal_reason
+
+        state.cost.wall_clock_ms = int((time.monotonic() - started) * 1000)
+        state.append_trace(
+            trace(
+                "orchestrator",
+                "query_completed",
+                payload={
+                    "citations": len(state.final_response.citations),
+                    "currency_flags": len(state.final_response.currency_flags),
+                    "wall_clock_ms": state.cost.wall_clock_ms,
+                    "from_cache": True,
+                },
+            )
+        )
+        return True
+
+    def _store_in_cache(self, state: QueryState) -> None:
+        """Persist a freshly-computed FinalResponse. Must be called AFTER
+        `final_response` is populated but BEFORE the cache_hit trace is
+        replayed — we only want live-run events in the stored payload."""
+        if self.cache is None:
+            return
+        if state.final_response is None:
+            return
+        # Exclude the `query_completed` tail event — that gets regenerated
+        # on replay with fresh timing. Everything else is replay-safe.
+        replayable = [
+            e
+            for e in state.trace_events
+            if not (e.agent == "orchestrator" and e.event_type == "query_completed")
+        ]
+        try:
+            self.cache.put(cache_key(state.original_query), state.final_response, replayable)
+        except Exception as exc:
+            # Cache is best-effort — never break a successful query on a
+            # persistence failure.
+            log.warning("cache.put_failed", error=str(exc), query_id=state.query_id)
+
     # ------------------------------------------------------------------ finalize
 
     def _finalize_success(
@@ -306,6 +399,7 @@ class Orchestrator:
         assert state.draft_answer is not None
         state.cost.wall_clock_ms = int((time.monotonic() - started) * 1000)
         state.final_response = _assemble_success(state)
+        self._store_in_cache(state)
         state.append_trace(
             trace(
                 "orchestrator",
@@ -333,6 +427,7 @@ class Orchestrator:
             currency_flags=[],
             refusal_reason=reason,
         )
+        self._store_in_cache(state)
         state.append_trace(
             trace(
                 "orchestrator",

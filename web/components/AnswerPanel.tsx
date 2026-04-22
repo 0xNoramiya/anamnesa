@@ -33,6 +33,8 @@ export function AnswerPanel({ final, onOpenPdf }: Props) {
         </span>
       </div>
 
+      {final.from_cache && <CacheBadge ageSeconds={final.cached_age_s ?? null} />}
+
       <BodyProse content={final.answer_markdown} indexByKey={indexByKey} />
 
       <section className="mt-10">
@@ -347,4 +349,38 @@ function Disclaimer() {
       </p>
     </footer>
   );
+}
+
+function CacheBadge({ ageSeconds }: { ageSeconds: number | null }) {
+  const label = formatCacheAge(ageSeconds);
+  return (
+    <div
+      className="mb-5 flex items-center gap-2 text-caption font-mono uppercase
+                 tracking-editorial text-civic bg-civic/5 border border-civic/20
+                 rounded-md px-3 py-2"
+      title="Jawaban ini diambil dari cache — kueri serupa sudah pernah dijalankan."
+    >
+      <svg
+        width="14"
+        height="14"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <polyline points="20 6 9 17 4 12" />
+      </svg>
+      <span>Dari cache · {label}</span>
+    </div>
+  );
+}
+
+function formatCacheAge(seconds: number | null): string {
+  if (seconds == null) return "baru saja";
+  if (seconds < 60) return "baru saja";
+  if (seconds < 3600) return `${Math.round(seconds / 60)} menit lalu`;
+  if (seconds < 86400) return `${Math.round(seconds / 3600)} jam lalu`;
+  return `${Math.round(seconds / 86400)} hari lalu`;
 }
