@@ -38,46 +38,66 @@ Two surfaces:
 | Mode | Path | Cost | Latency | Use for |
 |---|---|---|---|---|
 | **Cari Cepat** (fast search) | `GET /api/search?q=…` | $0 (no LLM) | ~50 ms | "Which PDF says X?" |
-| **Mode Agen** (agentic RAG) | `POST /api/query` + SSE `/api/stream/{id}` | ~$0.40–0.60 | ~150 s | "Synthesize + cite + flag currency" |
+| **Mode Agen** (agentic RAG) | `POST /api/query` + SSE `/api/stream/{id}` | ~$0.40–0.60 | ~130 s live · 0 s on cache hit | "Synthesize + cite + flag currency" |
 
 Mode Agen runs four agents in a controlled loop:
 
 1. **Normalizer** — Haiku 4.5. Colloquial Bahasa → structured query.
 2. **Retriever** — Hybrid BGE-M3 (vector) + rank-bm25, reciprocal-rank
    fusion. No LLM.
-3. **Drafter** — Opus 4.7 with adaptive thinking + xhigh effort.
-   Composes a cited Bahasa answer via tool-use (`search_guidelines`,
-   `get_full_section`, `submit_decision`).
-4. **Verifier** — Opus 4.7 with 1M ctx. Re-reads every cited chunk,
-   classifies claims `supported | partial | unsupported`, attaches
-   currency flags (`current | aging | superseded | withdrawn`). Fails
-   closed on malformed output.
+3. **Drafter** — Opus 4.7 with adaptive thinking + `high` effort (env-
+   tunable via `ANAMNESA_DRAFTER_EFFORT`). Composes a cited Bahasa
+   answer via tool-use (`search_guidelines`, `get_full_section`,
+   `submit_decision`).
+4. **Verifier** — Opus 4.7 with 1M ctx + `high` effort. Re-reads every
+   cited chunk, classifies claims `supported | partial | unsupported`,
+   attaches currency flags (`current | aging | superseded | withdrawn`).
+   Fails closed on malformed output.
 
-Every event from every agent streams into the UI as a live trace.
+Every event from every agent streams into the UI as a collapsible
+per-agent phase trace.
+
+**Answer UX layer** (all live on the /app surface):
+
+- Inline `[N]` citations scroll-and-flash to their reference card on
+  click; hovering either side of the cite↔ref pair halos the other.
+- "Salin kutipan" per reference; "Salin" + "Unduh .md" per answer,
+  with citations re-rendered as `[^N]` footnotes for paste-friendly
+  shift notes.
+- 24h SQLite answer cache keyed on the raw user query — second query
+  returns in ~0s with a "Dari cache · X menit lalu" badge.
+- 👍 / 👎 thumbs stored server-side; `/admin/feedback` dashboard
+  auto-refreshes every 30s.
+- Client-side "Riwayat" — localStorage of the last 20 query+answer
+  pairs, restorable with one tap.
+- "Why refused" surface — on `corpus_silent` refusals the UI renders
+  the top 3 near-miss chunks the Retriever *did* find, so the user
+  can see the corpus was actually searched.
 
 ---
 
-## Current state (2026-04-22)
+## Current state (2026-04-23)
 
-**Corpus:** 79 PDFs crawled (PPK FKTP 2015 + 78 PNPKs from kemkes.go.id).
-25 ingested → **2,461 chunks** committed to `catalog/processed/`.
+**Corpus:** 80 PDFs ingested — PPK FKTP 2015 + 2022 (both Lampiran I
+condition PPKs and Lampiran II procedural skills) + 78 PNPKs from
+kemkes.go.id. **8,864 chunks** committed to `catalog/processed/`.
 
-**Retrieval:** LanceDB + rank-bm25, BGE-M3 (1024-dim) vectors on CUDA.
+**Retrieval:** LanceDB + rank-bm25, BGE-M3 (1024-dim) vectors. CUDA in
+dev, CPU on prod.
 
-**Eval:** 20 queries drawn from Banjarmasin ED/GP scenarios.
-**19/20 pass (95%)**, **0 hallucinated citations** across all runs.
-Breakdown: `grounded 11/14 · aging 3/3 · absent 3/3`.
-
-The one remaining failure (`q011` preeklampsia) is a known retrieval-
-granularity issue on the concatenated 4-sub-PNPK
-`pnpk-komplikasi-kehamilan-2017`, not a hallucination.
+**Eval:** 23 queries drawn from Banjarmasin ED/GP scenarios —
+**23/23 pass (100%)**, **0 hallucinated citations** across all runs.
+Breakdown: `grounded 17/17 · aging 3/3 · absent 3/3`.
 
 **Demo scenarios from CLAUDE.md:**
 - ✅ Colloquial Bahasa → cited answer (`q001` neonatal Menit-Emas)
 - ✅ Aging guideline correctly flagged (`q016` TB OAT 2019 paduan 2RHZE/4RH)
 - ✅ Absent-corpus refusal (`q019` HAS-BLED score)
 
-**Tests:** 120 passing. Ruff clean.
+**Tests:** 147 passing. Ruff clean.
+
+**Prod:** https://anamnesa.kudaliar.id · `scripts/smoke_prod.py` for a
+single-command all-surface health check.
 
 ---
 
@@ -171,14 +191,19 @@ Eval:
 
 ## Honest caveats
 
-- **PPK FKTP 2015 is 11 years old.** Anamnesa flags every cited
-  recommendation with its source year and marks `aging` when >5 years
-  old. Antibiotics, fluid protocols, DM/HT targets, and infectious-
-  disease recommendations have all moved.
-- **Corpus is not complete.** 25 of 79 crawled PDFs ingested so far —
-  prioritizing ED/GP conditions. Clinical scenarios exist where no
-  Indonesian guideline covers the question. Anamnesa refuses rather
-  than hallucinating.
+- **PPK FKTP 2015 is 11 years old.** PPK FKTP 2022 is the current
+  primary-care guideline; both are indexed. Anamnesa flags every cited
+  recommendation with its source year, marks `aging` when >5 years old,
+  and marks the 2015 PPKs as `superseded` by 2022 via the supersession
+  graph. Antibiotics, fluid protocols, DM/HT targets, and infectious-
+  disease recommendations have all moved — the Verifier calls
+  `check_supersession` on every `doc_id` and attaches the flag before
+  the answer ships.
+- **Corpus is not exhaustive.** 80 PDFs is broad but clinical scenarios
+  exist where no Indonesian guideline covers the question. Anamnesa
+  refuses rather than hallucinating, and on a `corpus_silent` refusal
+  the UI surfaces the near-miss chunks it *did* find so the user can
+  see the gap for themselves.
 - **Not a medical device.** Not BPOM-registered. Reference use only.
 
 ---
