@@ -100,6 +100,7 @@ class Orchestrator:
         t0 = time.monotonic()
         result = await self.normalizer.run(state)
         latency_ms = int((time.monotonic() - t0) * 1000)
+        self._charge_agent_usage(state, "normalizer", self.normalizer)
 
         if isinstance(result, NormalizerRefusal):
             state.refusal_reason = result.reason
@@ -171,6 +172,7 @@ class Orchestrator:
             t0 = time.monotonic()
             draft_result = await self.drafter.run(state, verifier_feedback=verifier_feedback)
             drafter_latency = int((time.monotonic() - t0) * 1000)
+            self._charge_agent_usage(state, "drafter", self.drafter)
             verifier_feedback = None  # consumed
 
             if isinstance(draft_result, DrafterNeedMoreRetrieval):
@@ -217,6 +219,7 @@ class Orchestrator:
             t0 = time.monotonic()
             verification: VerificationResult = await self.verifier.run(state)
             verifier_latency = int((time.monotonic() - t0) * 1000)
+            self._charge_agent_usage(state, "verifier", self.verifier)
             state.verification = verification
             state.currency_flags = list(verification.currency_flags)
             state.append_trace(
@@ -265,6 +268,23 @@ class Orchestrator:
             # consume another retrieval slot. This is a deliberate choice —
             # re-running retrieval with identical filters is cheap relative
             # to the LLM calls and keeps the loop structurally simple.
+
+    # ---------------------------------------------------------------- usage
+
+    @staticmethod
+    def _charge_agent_usage(state: QueryState, agent_name: str, agent: object) -> None:
+        """Read the agent's `last_usage` (populated after each run) and fold
+        it into `state.cost`. Tolerant of agents that don't expose this
+        attribute or leave it None (e.g. test fakes, early returns)."""
+        usage = getattr(agent, "last_usage", None)
+        if not usage:
+            return
+        state.cost.add(
+            agent_name,
+            input_tokens=int(usage.get("input_tokens", 0) or 0),
+            output_tokens=int(usage.get("output_tokens", 0) or 0),
+            thinking_tokens=int(usage.get("thinking_tokens", 0) or 0),
+        )
 
     # ------------------------------------------------------------------ finalize
 
