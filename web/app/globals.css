@@ -66,6 +66,18 @@
            transition-shadow hover:shadow-card-hover;
   }
 
+  /* Brief highlight pulse when the user clicks an inline citation
+     marker. JS adds .ref-flash for ~1.6s; the class self-removes so a
+     repeat click restarts the animation. */
+  .ref-flash {
+    animation: refFlash 1.4s ease-out;
+  }
+  @keyframes refFlash {
+    0%   { background-color: theme("colors.civic.DEFAULT / 22%"); box-shadow: 0 0 0 4px theme("colors.civic.DEFAULT / 22%"); }
+    30%  { background-color: theme("colors.civic.DEFAULT / 12%"); box-shadow: 0 0 0 4px theme("colors.civic.DEFAULT / 12%"); }
+    100% { background-color: transparent; box-shadow: none; }
+  }
+
   /* Trace event row */
   .trace-row {
     @apply font-mono text-[0.76rem] leading-snug py-1.5 px-2.5 relative

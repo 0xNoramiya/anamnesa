@@ -207,6 +207,19 @@ function maybeRenderTable(
  * Tokenize a paragraph into text + inline markdown + citation markers.
  * Handles `[[doc_id:pN:section]]`, `**bold**`, and `*italic*` in one pass.
  */
+function jumpToReference(key: string, event?: React.MouseEvent) {
+  if (typeof document === "undefined") return;
+  // Let users cmd/ctrl-click to open in a new tab (native anchor behavior).
+  if (event && (event.metaKey || event.ctrlKey || event.shiftKey)) return;
+  event?.preventDefault();
+  const target = document.getElementById(`ref-${key}`);
+  if (!target) return;
+  target.scrollIntoView({ behavior: "smooth", block: "center" });
+  target.classList.add("ref-flash");
+  // Remove the class after the animation completes so a re-click retriggers.
+  window.setTimeout(() => target.classList.remove("ref-flash"), 1600);
+}
+
 function renderInline(
   text: string,
   indexByKey: Map<string, number>,
@@ -221,12 +234,15 @@ function renderInline(
     if (match[1] !== undefined) {
       const key = match[1];
       const n = indexByKey.get(key);
+      const known = n !== undefined;
       parts.push(
         <a
           key={`c-${counter++}`}
           href={`#ref-${key}`}
+          onClick={known ? (e) => jumpToReference(key, e) : undefined}
           className="cite-marker"
-          title={key}
+          title={known ? `Referensi ${n}: ${key}` : key}
+          aria-label={known ? `Lompat ke referensi ${n}` : `Referensi ${key}`}
         >
           {n ?? "?"}
         </a>,
