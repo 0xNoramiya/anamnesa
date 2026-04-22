@@ -40,8 +40,10 @@ export function FastSearch({ onOpenPdf, onEscalate }: Props) {
   const [data, setData] = useState<SearchResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [activeIndex, setActiveIndex] = useState(0);
   const acRef = useRef<AbortController | null>(null);
   const debounceRef = useRef<number | null>(null);
+  const listRef = useRef<HTMLUListElement | null>(null);
 
   const doSearch = useCallback(async (q: string) => {
     acRef.current?.abort();
@@ -84,6 +86,38 @@ export function FastSearch({ onOpenPdf, onEscalate }: Props) {
     };
   }, [value, doSearch]);
 
+  // Reset keyboard selection whenever the result list itself changes
+  // (new query → fresh results → pointer back to the top).
+  useEffect(() => {
+    setActiveIndex(0);
+  }, [data?.query, data?.count]);
+
+  // Scroll the active row into view on arrow-key navigation so the user
+  // doesn't lose track when they move past the viewport.
+  useEffect(() => {
+    if (!listRef.current) return;
+    const node = listRef.current.querySelector<HTMLElement>(
+      `[data-index="${activeIndex}"]`,
+    );
+    node?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [activeIndex]);
+
+  const handleInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    const total = data?.results.length ?? 0;
+    if (!total) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setActiveIndex((i) => Math.min(total - 1, i + 1));
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActiveIndex((i) => Math.max(0, i - 1));
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      const r = data!.results[activeIndex];
+      if (r) onOpenPdf(r.doc_id, r.page);
+    }
+  };
+
   // Terms for highlighting: drop short tokens, strip punctuation.
   const terms = useMemo(() => {
     return value
@@ -105,9 +139,16 @@ export function FastSearch({ onOpenPdf, onEscalate }: Props) {
           type="text"
           value={value}
           onChange={(e) => setValue(e.target.value)}
+          onKeyDown={handleInputKeyDown}
           placeholder="contoh: DBD anak · OAT lini pertama · preeklampsia"
           className="flex-1 bg-transparent border-0 focus:outline-none
                      text-body-lg text-ink placeholder:text-ink-ghost"
+          aria-activedescendant={
+            data && data.results.length > 0 ? `fast-r-${activeIndex}` : undefined
+          }
+          role="combobox"
+          aria-controls="fast-results"
+          aria-expanded={Boolean(data && data.results.length > 0)}
         />
         {loading && <Spinner />}
         {value && !loading && (
@@ -175,12 +216,20 @@ export function FastSearch({ onOpenPdf, onEscalate }: Props) {
             ))}
           </div>
 
-          <ul className="mt-5 space-y-2.5">
+          <ul
+            id="fast-results"
+            ref={listRef}
+            role="listbox"
+            className="mt-5 space-y-2.5"
+          >
             {data.results.map((r, i) => (
               <ResultRow
                 key={`${r.doc_id}-${r.page}-${r.section_slug}-${i}`}
                 result={r}
                 terms={terms}
+                index={i}
+                active={i === activeIndex}
+                onFocus={() => setActiveIndex(i)}
                 onOpenPdf={() => onOpenPdf(r.doc_id, r.page)}
               />
             ))}
@@ -197,6 +246,11 @@ export function FastSearch({ onOpenPdf, onEscalate }: Props) {
             Hasil langsung dari korpus terindeks — tanpa agen, tanpa sintesis,
             tanpa biaya LLM. Buka PDF untuk membaca penuh.
           </p>
+          <p className="mt-4 text-caption font-mono uppercase tracking-editorial text-ink-faint inline-flex items-center gap-1.5">
+            <KbdHint>↑</KbdHint><KbdHint>↓</KbdHint> pindah hasil
+            <span className="text-ink-ghost mx-2">·</span>
+            <KbdHint>↵</KbdHint> buka PDF
+          </p>
         </div>
       )}
     </div>
@@ -206,10 +260,16 @@ export function FastSearch({ onOpenPdf, onEscalate }: Props) {
 function ResultRow({
   result,
   terms,
+  index,
+  active,
+  onFocus,
   onOpenPdf,
 }: {
   result: SearchResult;
   terms: string[];
+  index: number;
+  active: boolean;
+  onFocus: () => void;
   onOpenPdf: () => void;
 }) {
   const sourceType = result.doc_id.startsWith("ppk-fktp")
@@ -218,12 +278,19 @@ function ResultRow({
     ? "PNPK"
     : result.source_type.toUpperCase();
   return (
-    <li>
+    <li
+      data-index={index}
+      id={`fast-r-${index}`}
+      role="option"
+      aria-selected={active}
+    >
       <button
         type="button"
         onClick={onOpenPdf}
-        className="w-full text-left doc-card cursor-pointer
-                   hover:border-civic/30"
+        onMouseEnter={onFocus}
+        className={`w-full text-left doc-card cursor-pointer transition-colors
+                    hover:border-civic/30
+                    ${active ? "border-civic/60 bg-civic/5 shadow-card" : ""}`}
       >
         <div className="flex items-center gap-2 flex-wrap mb-1">
           <span className="source-pill">{sourceType}</span>
@@ -306,5 +373,15 @@ function Spinner() {
       aria-label="mencari"
       className="inline-block w-3.5 h-3.5 rounded-full border-2 border-civic/30 border-t-civic animate-spin"
     />
+  );
+}
+
+function KbdHint({ children }: { children: React.ReactNode }) {
+  return (
+    <kbd className="inline-flex items-center justify-center min-w-[1.3em] h-[1.3em]
+                    px-1 mx-0.5 rounded border border-paper-edge bg-white
+                    font-mono text-[0.7rem] text-ink-mid leading-none">
+      {children}
+    </kbd>
   );
 }
