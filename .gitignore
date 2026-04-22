@@ -45,6 +45,9 @@ eval/results/*.md
 *.log
 logs/
 
+# Claude Code session state
+.claude/
+
 # Editors / OS
 .vscode/
 .idea/

@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-04-22T01:49:56.310940Z",
+  "generated_at": "2026-04-22T09:28:45.930615Z",
   "documents": [
     {
       "doc_id": "pnpk-dengue-dewasa-2020",
@@ -81,7 +81,9 @@
       "language": "id",
       "status": "ingested",
       "supersedes": [],
-      "superseded_by": [],
+      "superseded_by": [
+        "ppk-fktp-2022"
+      ],
       "discovered_at": "2026-04-22T01:25:43.971243Z",
       "discovered_by": "crawler/ppk-fktp-2015-seed",
       "notes": "Single combined PDF containing Kepmenkes 514/2015 decree + Lampiran I (PPK Dokter — 155 kondisi klinis) + Lampiran II (Panduan Keterampilan Klinis). Verified page 1 cover names Kepmenkes HK.02.02/MENKES/514/2015 verbatim. Kemkes own subdomain siha.kemkes.go.id had 503 during crawl; official repository.kemkes.go.id book 755 Google Drive mirror was mislabeled (served Panduan Pelayanan Kesehatan Bergerak 2020 instead). Archive.org item (uploaded 2016-05, 50MB) was the only verifiable copy; content matches decree text. Status per Kemkes: superseded by Kepmenkes HK.01.07/MENKES/1186/2022 — keep for historical SKDI 4A retrieval. | ingested: 1279p via text path, 177 PPK conditions detected in Lampiran I, chunks=1872, lampiran_ii_deferred"
@@ -373,12 +375,12 @@
       "file_size_bytes": 937786,
       "pages": 101,
       "language": "id",
-      "status": "downloaded",
+      "status": "ingested",
       "supersedes": [],
       "superseded_by": [],
       "discovered_at": "2026-04-22T01:26:56.960917Z",
       "discovered_by": "crawler/pnpk-kemkes-archive",
-      "notes": ""
+      "notes": "ingested: 28 chunks, text-extract"
     },
     {
       "doc_id": "pnpk-pneumonia-dewasa-2023",
@@ -415,12 +417,12 @@
       "file_size_bytes": 620754,
       "pages": 79,
       "language": "id",
-      "status": "downloaded",
+      "status": "ingested",
       "supersedes": [],
       "superseded_by": [],
       "discovered_at": "2026-04-22T01:27:00.012637Z",
       "discovered_by": "crawler/pnpk-kemkes-archive",
-      "notes": ""
+      "notes": "ingested: 19 chunks, text-extract"
     },
     {
       "doc_id": "pnpk-penyakit-ginjal-kronik-2023",
@@ -436,12 +438,12 @@
       "file_size_bytes": 2107452,
       "pages": 289,
       "language": "id",
-      "status": "downloaded",
+      "status": "ingested",
       "supersedes": [],
       "superseded_by": [],
       "discovered_at": "2026-04-22T01:27:01.698496Z",
       "discovered_by": "crawler/pnpk-kemkes-archive",
-      "notes": ""
+      "notes": "ingested: 289p, 283 chunks"
     },
     {
       "doc_id": "pnpk-gagal-jantung-2021",
@@ -499,12 +501,12 @@
       "file_size_bytes": 1312889,
       "pages": 82,
       "language": "id",
-      "status": "downloaded",
+      "status": "ingested",
       "supersedes": [],
       "superseded_by": [],
       "discovered_at": "2026-04-22T01:27:35.439909Z",
       "discovered_by": "crawler/pnpk-kemkes-archive",
-      "notes": ""
+      "notes": "ingested: 26 chunks, text-extract"
     },
     {
       "doc_id": "pnpk-osteoporosis-2023",
@@ -520,12 +522,12 @@
       "file_size_bytes": 1533587,
       "pages": 160,
       "language": "id",
-      "status": "downloaded",
+      "status": "ingested",
       "supersedes": [],
       "superseded_by": [],
       "discovered_at": "2026-04-22T01:27:38.005863Z",
       "discovered_by": "crawler/pnpk-kemkes-archive",
-      "notes": ""
+      "notes": "ingested: 160p, 151 chunks"
     },
     {
       "doc_id": "pnpk-glaukoma-2023",
@@ -541,12 +543,12 @@
       "file_size_bytes": 1751157,
       "pages": 124,
       "language": "id",
-      "status": "downloaded",
+      "status": "ingested",
       "supersedes": [],
       "superseded_by": [],
       "discovered_at": "2026-04-22T01:27:39.652105Z",
       "discovered_by": "crawler/pnpk-kemkes-archive",
-      "notes": ""
+      "notes": "ingested: 25 chunks, text-extract"
     },
     {
       "doc_id": "pnpk-kanker-paru-2023",
@@ -562,12 +564,12 @@
       "file_size_bytes": 2055931,
       "pages": 90,
       "language": "id",
-      "status": "downloaded",
+      "status": "ingested",
       "supersedes": [],
       "superseded_by": [],
       "discovered_at": "2026-04-22T01:27:41.263859Z",
       "discovered_by": "crawler/pnpk-kemkes-archive",
-      "notes": ""
+      "notes": "ingested: 23 chunks, text-extract"
     },
     {
       "doc_id": "pnpk-retinopati-diabetika-2023",
@@ -583,12 +585,12 @@
       "file_size_bytes": 816883,
       "pages": 36,
       "language": "id",
-      "status": "downloaded",
+      "status": "ingested",
       "supersedes": [],
       "superseded_by": [],
       "discovered_at": "2026-04-22T01:27:42.760270Z",
       "discovered_by": "crawler/pnpk-kemkes-archive",
-      "notes": ""
+      "notes": "ingested: 36p, 12 chunks"
     },
     {
       "doc_id": "pnpk-pulpa-periradikuler-2023",
@@ -604,12 +606,12 @@
       "file_size_bytes": 24918485,
       "pages": 119,
       "language": "id",
-      "status": "downloaded",
+      "status": "ingested",
       "supersedes": [],
       "superseded_by": [],
       "discovered_at": "2026-04-22T01:27:46.318326Z",
       "discovered_by": "crawler/pnpk-kemkes-archive",
-      "notes": ""
+      "notes": "ingested: 19 chunks, text-extract"
     },
     {
       "doc_id": "pnpk-stunting-2022",
@@ -625,12 +627,12 @@
       "file_size_bytes": 1329203,
       "pages": 52,
       "language": "id",
-      "status": "downloaded",
+      "status": "ingested",
       "supersedes": [],
       "superseded_by": [],
       "discovered_at": "2026-04-22T01:27:47.839419Z",
       "discovered_by": "crawler/pnpk-kemkes-archive",
-      "notes": ""
+      "notes": "ingested: 52p, 42 chunks"
     },
     {
       "doc_id": "pnpk-cidera-otak-traumatik-2022",
@@ -667,12 +669,12 @@
       "file_size_bytes": 3440647,
       "pages": 223,
       "language": "id",
-      "status": "downloaded",
+      "status": "ingested",
       "supersedes": [],
       "superseded_by": [],
       "discovered_at": "2026-04-22T01:28:21.756219Z",
       "discovered_by": "crawler/pnpk-kemkes-archive",
-      "notes": ""
+      "notes": "ingested: 223p, 228 chunks"
     },
     {
       "doc_id": "pnpk-katarak-anak-2020",
@@ -688,12 +690,12 @@
       "file_size_bytes": 488570,
       "pages": 37,
       "language": "id",
-      "status": "downloaded",
+      "status": "ingested",
       "supersedes": [],
       "superseded_by": [],
       "discovered_at": "2026-04-22T01:28:23.435884Z",
       "discovered_by": "crawler/pnpk-kemkes-archive",
-      "notes": ""
+      "notes": "ingested: 37p, 25 chunks"
     },
     {
       "doc_id": "pnpk-karsinoma-sel-hati-2022",
@@ -709,12 +711,12 @@
       "file_size_bytes": 936565,
       "pages": 112,
       "language": "id",
-      "status": "downloaded",
+      "status": "ingested",
       "supersedes": [],
       "superseded_by": [],
       "discovered_at": "2026-04-22T01:28:24.982790Z",
       "discovered_by": "crawler/pnpk-kemkes-archive",
-      "notes": ""
+      "notes": "ingested: 24 chunks, text-extract"
     },
     {
       "doc_id": "pnpk-impaksi-gigi-2022",
@@ -730,12 +732,12 @@
       "file_size_bytes": 27476931,
       "pages": 125,
       "language": "id",
-      "status": "downloaded",
+      "status": "ingested",
       "supersedes": [],
       "superseded_by": [],
       "discovered_at": "2026-04-22T01:28:29.054395Z",
       "discovered_by": "crawler/pnpk-kemkes-archive",
-      "notes": ""
+      "notes": "chunks=5"
     },
     {
       "doc_id": "pnpk-anestesiologi-terapi-intensif-2022",
@@ -751,14 +753,14 @@
       "file_size_bytes": 2248284,
       "pages": 504,
       "language": "id",
-      "status": "downloaded",
+      "status": "ingested",
       "supersedes": [
         "pnpk-anestesiologi-terapi-intensif-2015"
       ],
       "superseded_by": [],
       "discovered_at": "2026-04-22T01:33:01.555380Z",
       "discovered_by": "crawler/pnpk-kemkes-archive",
-      "notes": ""
+      "notes": "ingested: 504p, 496 chunks"
     },
     {
       "doc_id": "pnpk-tuli-sensorineural-kongenital-2022",
@@ -774,12 +776,12 @@
       "file_size_bytes": 3299513,
       "pages": 158,
       "language": "id",
-      "status": "downloaded",
+      "status": "ingested",
       "supersedes": [],
       "superseded_by": [],
       "discovered_at": "2026-04-22T01:28:32.552614Z",
       "discovered_by": "crawler/pnpk-kemkes-archive",
-      "notes": ""
+      "notes": "ingested: 158p, 139 chunks"
     },
     {
       "doc_id": "pnpk-rinosinusitis-kronik-2022",
@@ -795,12 +797,12 @@
       "file_size_bytes": 1884346,
       "pages": 106,
       "language": "id",
-      "status": "downloaded",
+      "status": "ingested",
       "supersedes": [],
       "superseded_by": [],
       "discovered_at": "2026-04-22T01:28:34.253021Z",
       "discovered_by": "crawler/pnpk-kemkes-archive",
-      "notes": ""
+      "notes": "ingested: 11 chunks, text-extract"
     },
     {
       "doc_id": "pnpk-batu-saluran-kemih-2022",
@@ -816,12 +818,12 @@
       "file_size_bytes": 683627,
       "pages": 69,
       "language": "id",
-      "status": "downloaded",
+      "status": "ingested",
       "supersedes": [],
       "superseded_by": [],
       "discovered_at": "2026-04-22T01:28:35.694416Z",
       "discovered_by": "crawler/pnpk-kemkes-archive",
-      "notes": ""
+      "notes": "ingested: 69p, 15 chunks"
     },
     {
       "doc_id": "pnpk-retinoblastoma-2022",
@@ -837,12 +839,12 @@
       "file_size_bytes": 1766256,
       "pages": 54,
       "language": "id",
-      "status": "downloaded",
+      "status": "ingested",
       "supersedes": [],
       "superseded_by": [],
       "discovered_at": "2026-04-22T01:28:37.243946Z",
       "discovered_by": "crawler/pnpk-kemkes-archive",
-      "notes": ""
+      "notes": "ingested: 54p, 24 chunks"
     },
     {
       "doc_id": "pnpk-hemofilia-2021",
@@ -858,12 +860,12 @@
       "file_size_bytes": 1381190,
       "pages": 152,
       "language": "id",
-      "status": "downloaded",
+      "status": "ingested",
       "supersedes": [],
       "superseded_by": [],
       "discovered_at": "2026-04-22T01:28:38.793127Z",
       "discovered_by": "crawler/pnpk-kemkes-archive",
-      "notes": ""
+      "notes": "ingested: 152p, 121 chunks"
     },
     {
       "doc_id": "pnpk-fraktur-kraniomaksilofasial-2021",
@@ -879,12 +881,12 @@
       "file_size_bytes": 6480084,
       "pages": 125,
       "language": "id",
-      "status": "downloaded",
+      "status": "ingested",
       "supersedes": [],
       "superseded_by": [],
       "discovered_at": "2026-04-22T01:29:12.170951Z",
       "discovered_by": "crawler/pnpk-kemkes-archive",
-      "notes": ""
+      "notes": "chunks=5"
     },
     {
       "doc_id": "pnpk-skoliosis-idiopatik-remaja-2021",
@@ -900,12 +902,12 @@
       "file_size_bytes": 3929256,
       "pages": 95,
       "language": "id",
-      "status": "downloaded",
+      "status": "ingested",
       "supersedes": [],
       "superseded_by": [],
       "discovered_at": "2026-04-22T01:29:14.999902Z",
       "discovered_by": "crawler/pnpk-kemkes-archive",
-      "notes": ""
+      "notes": "ingested: 28 chunks, text-extract"
     },
     {
       "doc_id": "pnpk-dermatitis-seboroik-2019",
@@ -921,12 +923,12 @@
       "file_size_bytes": 935174,
       "pages": 36,
       "language": "id",
-      "status": "downloaded",
+      "status": "ingested",
       "supersedes": [],
       "superseded_by": [],
       "discovered_at": "2026-04-22T01:29:16.495024Z",
       "discovered_by": "crawler/pnpk-kemkes-archive",
-      "notes": ""
+      "notes": "ingested: 36p, 17 chunks"
     },
     {
       "doc_id": "pnpk-asfiksia-2019",
@@ -963,12 +965,12 @@
       "file_size_bytes": 903659,
       "pages": 143,
       "language": "id",
-      "status": "downloaded",
+      "status": "ingested",
       "supersedes": [],
       "superseded_by": [],
       "discovered_at": "2026-04-22T01:29:19.869864Z",
       "discovered_by": "crawler/pnpk-kemkes-archive",
-      "notes": ""
+      "notes": "ingested: 143p, 128 chunks"
     },
     {
       "doc_id": "pnpk-bibir-sumbing-2019",
@@ -984,12 +986,12 @@
       "file_size_bytes": 845806,
       "pages": 44,
       "language": "id",
-      "status": "downloaded",
+      "status": "ingested",
       "supersedes": [],
       "superseded_by": [],
       "discovered_at": "2026-04-22T01:29:21.439339Z",
       "discovered_by": "crawler/pnpk-kemkes-archive",
-      "notes": ""
+      "notes": "ingested: 44p, 32 chunks"
     },
     {
       "doc_id": "pnpk-luka-bakar-2019",
@@ -1026,12 +1028,12 @@
       "file_size_bytes": 734098,
       "pages": 42,
       "language": "id",
-      "status": "downloaded",
+      "status": "ingested",
       "supersedes": [],
       "superseded_by": [],
       "discovered_at": "2026-04-22T01:29:24.653304Z",
       "discovered_by": "crawler/pnpk-kemkes-archive",
-      "notes": ""
+      "notes": "ingested: 42p, 13 chunks"
     },
     {
       "doc_id": "pnpk-kusta-2019",
@@ -1047,12 +1049,12 @@
       "file_size_bytes": 1131502,
       "pages": 64,
       "language": "id",
-      "status": "downloaded",
+      "status": "ingested",
       "supersedes": [],
       "superseded_by": [],
       "discovered_at": "2026-04-22T01:29:26.756406Z",
       "discovered_by": "crawler/pnpk-kemkes-archive",
-      "notes": ""
+      "notes": "ingested: 64p, 18 chunks"
     },
     {
       "doc_id": "pnpk-kanker-nasofaring-2019",
@@ -1068,12 +1070,12 @@
       "file_size_bytes": 6780083,
       "pages": 81,
       "language": "id",
-      "status": "downloaded",
+      "status": "ingested",
       "supersedes": [],
       "superseded_by": [],
       "discovered_at": "2026-04-22T01:29:28.774912Z",
       "discovered_by": "crawler/pnpk-kemkes-archive",
-      "notes": ""
+      "notes": "ingested: 19 chunks, text-extract"
     },
     {
       "doc_id": "pnpk-nyeri-2019",
@@ -1089,12 +1091,12 @@
       "file_size_bytes": 1177688,
       "pages": 115,
       "language": "id",
-      "status": "downloaded",
+      "status": "ingested",
       "supersedes": [],
       "superseded_by": [],
       "discovered_at": "2026-04-22T01:30:00.344751Z",
       "discovered_by": "crawler/pnpk-kemkes-archive",
-      "notes": ""
+      "notes": "ingested: 21 chunks, text-extract"
     },
     {
       "doc_id": "pnpk-malnutrisi-dewasa-2019",
@@ -1110,12 +1112,12 @@
       "file_size_bytes": 1997717,
       "pages": 162,
       "language": "id",
-      "status": "downloaded",
+      "status": "ingested",
       "supersedes": [],
       "superseded_by": [],
       "discovered_at": "2026-04-22T01:30:01.970061Z",
       "discovered_by": "crawler/pnpk-kemkes-archive",
-      "notes": ""
+      "notes": "ingested: 162p, 133 chunks"
     },
     {
       "doc_id": "pnpk-hiperbilirubinemia-2019",
@@ -1131,12 +1133,12 @@
       "file_size_bytes": 1682683,
       "pages": 97,
       "language": "id",
-      "status": "downloaded",
+      "status": "ingested",
       "supersedes": [],
       "superseded_by": [],
       "discovered_at": "2026-04-22T01:30:03.501409Z",
       "discovered_by": "crawler/pnpk-kemkes-archive",
-      "notes": ""
+      "notes": "ingested: 21 chunks, text-extract"
     },
     {
       "doc_id": "pnpk-kanker-payudara-2018",
@@ -1152,12 +1154,12 @@
       "file_size_bytes": 1801075,
       "pages": 111,
       "language": "id",
-      "status": "downloaded",
+      "status": "ingested",
       "supersedes": [],
       "superseded_by": [],
       "discovered_at": "2026-04-22T01:30:05.063403Z",
       "discovered_by": "crawler/pnpk-kemkes-archive",
-      "notes": ""
+      "notes": "ingested: 33 chunks, text-extract"
     },
     {
       "doc_id": "pnpk-resusitasi-bblr-2018",
@@ -1194,12 +1196,12 @@
       "file_size_bytes": 1450888,
       "pages": 130,
       "language": "id",
-      "status": "downloaded",
+      "status": "ingested",
       "supersedes": [],
       "superseded_by": [],
       "discovered_at": "2026-04-22T01:30:08.212624Z",
       "discovered_by": "crawler/pnpk-kemkes-archive",
-      "notes": ""
+      "notes": "chunks=7"
     },
     {
       "doc_id": "pnpk-katarak-dewasa-2018",
@@ -1215,12 +1217,12 @@
       "file_size_bytes": 730863,
       "pages": 39,
       "language": "id",
-      "status": "downloaded",
+      "status": "ingested",
       "supersedes": [],
       "superseded_by": [],
       "discovered_at": "2026-04-22T01:30:09.649520Z",
       "discovered_by": "crawler/pnpk-kemkes-archive",
-      "notes": ""
+      "notes": "ingested: 39p, 17 chunks"
     },
     {
       "doc_id": "pnpk-tonsilitis-2018",
@@ -1236,12 +1238,12 @@
       "file_size_bytes": 560653,
       "pages": 63,
       "language": "id",
-      "status": "downloaded",
+      "status": "ingested",
       "supersedes": [],
       "superseded_by": [],
       "discovered_at": "2026-04-22T01:30:11.095420Z",
       "discovered_by": "crawler/pnpk-kemkes-archive",
-      "notes": ""
+      "notes": "ingested: 63p, 16 chunks"
     },
     {
       "doc_id": "pnpk-kanker-serviks-2018",
@@ -1257,12 +1259,12 @@
       "file_size_bytes": 1681663,
       "pages": 56,
       "language": "id",
-      "status": "downloaded",
+      "status": "ingested",
       "supersedes": [],
       "superseded_by": [],
       "discovered_at": "2026-04-22T01:30:12.608240Z",
       "discovered_by": "crawler/pnpk-kemkes-archive",
-      "notes": ""
+      "notes": "ingested: 56p, 21 chunks"
     },
     {
       "doc_id": "pnpk-thalasemia-2018",
@@ -1278,12 +1280,12 @@
       "file_size_bytes": 1331049,
       "pages": 90,
       "language": "id",
-      "status": "downloaded",
+      "status": "ingested",
       "supersedes": [],
       "superseded_by": [],
       "discovered_at": "2026-04-22T01:30:14.129759Z",
       "discovered_by": "crawler/pnpk-kemkes-archive",
-      "notes": ""
+      "notes": "ingested: 17 chunks, text-extract"
     },
     {
       "doc_id": "pnpk-kanker-prostat-2018",
@@ -1299,12 +1301,12 @@
       "file_size_bytes": 1804974,
       "pages": 91,
       "language": "id",
-      "status": "downloaded",
+      "status": "ingested",
       "supersedes": [],
       "superseded_by": [],
       "discovered_at": "2026-04-22T01:30:44.944038Z",
       "discovered_by": "crawler/pnpk-kemkes-archive",
-      "notes": ""
+      "notes": "ingested: 28 chunks, text-extract"
     },
     {
       "doc_id": "pnpk-kanker-kolorektal-2018",
@@ -1320,12 +1322,12 @@
       "file_size_bytes": 1786341,
       "pages": 160,
       "language": "id",
-      "status": "downloaded",
+      "status": "ingested",
       "supersedes": [],
       "superseded_by": [],
       "discovered_at": "2026-04-22T01:30:46.508825Z",
       "discovered_by": "crawler/pnpk-kemkes-archive",
-      "notes": ""
+      "notes": "ingested: 160p, 134 chunks"
     },
     {
       "doc_id": "pnpk-penyakit-ginjal-tahap-akhir-2017",
@@ -1341,12 +1343,12 @@
       "file_size_bytes": 2333830,
       "pages": 143,
       "language": "id",
-      "status": "downloaded",
+      "status": "ingested",
       "supersedes": [],
       "superseded_by": [],
       "discovered_at": "2026-04-22T01:30:48.149377Z",
       "discovered_by": "crawler/pnpk-kemkes-archive",
-      "notes": ""
+      "notes": "ingested: 143p, 146 chunks"
     },
     {
       "doc_id": "pnpk-epilepsi-anak-2017",
@@ -1362,12 +1364,12 @@
       "file_size_bytes": 728947,
       "pages": 79,
       "language": "id",
-      "status": "downloaded",
+      "status": "ingested",
       "supersedes": [],
       "superseded_by": [],
       "discovered_at": "2026-04-22T01:30:49.683566Z",
       "discovered_by": "crawler/pnpk-kemkes-archive",
-      "notes": ""
+      "notes": "ingested: 44 chunks, text-extract"
     },
     {
       "doc_id": "pnpk-infeksi-intraabdominal-2017",
@@ -1383,12 +1385,12 @@
       "file_size_bytes": 2522723,
       "pages": 73,
       "language": "id",
-      "status": "downloaded",
+      "status": "ingested",
       "supersedes": [],
       "superseded_by": [],
       "discovered_at": "2026-04-22T01:30:51.345728Z",
       "discovered_by": "crawler/pnpk-kemkes-archive",
-      "notes": ""
+      "notes": "ingested: 73p, 27 chunks"
     },
     {
       "doc_id": "pnpk-hirschsprung-2017",
@@ -1404,12 +1406,12 @@
       "file_size_bytes": 413990,
       "pages": 31,
       "language": "id",
-      "status": "downloaded",
+      "status": "ingested",
       "supersedes": [],
       "superseded_by": [],
       "discovered_at": "2026-04-22T01:30:52.746447Z",
       "discovered_by": "crawler/pnpk-kemkes-archive",
-      "notes": ""
+      "notes": "ingested: 31p, 16 chunks"
     },
     {
       "doc_id": "pnpk-kedokteran-jiwa-2015",
@@ -1425,12 +1427,12 @@
       "file_size_bytes": 6097128,
       "pages": 69,
       "language": "id",
-      "status": "downloaded",
+      "status": "ingested",
       "supersedes": [],
       "superseded_by": [],
       "discovered_at": "2026-04-22T01:30:55.075529Z",
       "discovered_by": "crawler/pnpk-kemkes-archive",
-      "notes": ""
+      "notes": "ingested: 69p, 65 chunks (fallback: per-page)"
     },
     {
       "doc_id": "pnpk-anestesiologi-terapi-intensif-2015",
@@ -1446,14 +1448,14 @@
       "file_size_bytes": 19276287,
       "pages": 139,
       "language": "id",
-      "status": "downloaded",
+      "status": "ingested",
       "supersedes": [],
       "superseded_by": [
         "pnpk-anestesiologi-terapi-intensif-2022"
       ],
       "discovered_at": "2026-04-22T01:30:58.153582Z",
       "discovered_by": "crawler/pnpk-kemkes-archive",
-      "notes": ""
+      "notes": "chunks=58"
     },
     {
       "doc_id": "pnpk-karies-gigi-2024",
@@ -1469,12 +1471,12 @@
       "file_size_bytes": 2491941,
       "pages": 49,
       "language": "id",
-      "status": "downloaded",
+      "status": "ingested",
       "supersedes": [],
       "superseded_by": [],
       "discovered_at": "2026-04-22T01:30:59.799647Z",
       "discovered_by": "crawler/pnpk-kemkes-archive",
-      "notes": ""
+      "notes": "ingested: 49p, 14 chunks"
     },
     {
       "doc_id": "pnpk-diabetes-melitus-anak-2024",
@@ -1511,12 +1513,12 @@
       "file_size_bytes": 6649768,
       "pages": 316,
       "language": "id",
-      "status": "downloaded",
+      "status": "ingested",
       "supersedes": [],
       "superseded_by": [],
       "discovered_at": "2026-04-22T01:31:42.237940Z",
       "discovered_by": "crawler/pnpk-kemkes-archive",
-      "notes": ""
+      "notes": "ingested: 316p, 327 chunks"
     },
     {
       "doc_id": "pnpk-skizofrenia-2025",
@@ -1532,12 +1534,12 @@
       "file_size_bytes": 3674186,
       "pages": 242,
       "language": "id",
-      "status": "downloaded",
+      "status": "ingested",
       "supersedes": [],
       "superseded_by": [],
       "discovered_at": "2026-04-22T01:31:44.019661Z",
       "discovered_by": "crawler/pnpk-kemkes-archive",
-      "notes": ""
+      "notes": "ingested: 242p, 267 chunks"
     },
     {
       "doc_id": "pnpk-obesitas-dewasa-2026",
@@ -1553,12 +1555,12 @@
       "file_size_bytes": 2198592,
       "pages": 76,
       "language": "id",
-      "status": "downloaded",
+      "status": "ingested",
       "supersedes": [],
       "superseded_by": [],
       "discovered_at": "2026-04-22T01:31:45.659055Z",
       "discovered_by": "crawler/pnpk-kemkes-archive",
-      "notes": ""
+      "notes": "ingested: 76p, 17 chunks"
     },
     {
       "doc_id": "pnpk-leukemia-limfoblastik-akut-anak-2026",
@@ -1574,12 +1576,12 @@
       "file_size_bytes": 1652648,
       "pages": 173,
       "language": "id",
-      "status": "downloaded",
+      "status": "ingested",
       "supersedes": [],
       "superseded_by": [],
       "discovered_at": "2026-04-22T01:31:47.272085Z",
       "discovered_by": "crawler/pnpk-kemkes-archive",
-      "notes": ""
+      "notes": "ingested: 173p, 176 chunks"
     },
     {
       "doc_id": "pnpk-penyakit-periodontal-2025",
@@ -1595,12 +1597,12 @@
       "file_size_bytes": 3322440,
       "pages": 86,
       "language": "id",
-      "status": "downloaded",
+      "status": "ingested",
       "supersedes": [],
       "superseded_by": [],
       "discovered_at": "2026-04-22T01:32:39.507906Z",
       "discovered_by": "crawler/pnpk-kemkes-archive",
-      "notes": ""
+      "notes": "ingested: 14 chunks, text-extract"
     },
     {
       "doc_id": "pnpk-infeksi-saluran-kemih-2025",
@@ -1616,12 +1618,12 @@
       "file_size_bytes": 2818439,
       "pages": 111,
       "language": "id",
-      "status": "downloaded",
+      "status": "ingested",
       "supersedes": [],
       "superseded_by": [],
       "discovered_at": "2026-04-22T01:32:41.250421Z",
       "discovered_by": "crawler/pnpk-kemkes-archive",
-      "notes": ""
+      "notes": "ingested: 42 chunks, text-extract"
     },
     {
       "doc_id": "pnpk-sirosis-hati-dewasa-2025",
@@ -1637,12 +1639,12 @@
       "file_size_bytes": 4218872,
       "pages": 260,
       "language": "id",
-      "status": "downloaded",
+      "status": "ingested",
       "supersedes": [],
       "superseded_by": [],
       "discovered_at": "2026-04-22T01:32:43.117171Z",
       "discovered_by": "crawler/pnpk-kemkes-archive",
-      "notes": ""
+      "notes": "ingested: 260p, 250 chunks"
     },
     {
       "doc_id": "pnpk-ulkus-kornea-bakteri-2025",
@@ -1658,12 +1660,35 @@
       "file_size_bytes": 1980099,
       "pages": 41,
       "language": "id",
-      "status": "downloaded",
+      "status": "ingested",
       "supersedes": [],
       "superseded_by": [],
       "discovered_at": "2026-04-22T01:32:44.697692Z",
       "discovered_by": "crawler/pnpk-kemkes-archive",
-      "notes": ""
+      "notes": "ingested: 41p, 16 chunks"
+    },
+    {
+      "doc_id": "ppk-fktp-2022",
+      "source_type": "ppk_fktp",
+      "title": "Panduan Praktik Klinis bagi Dokter di Fasilitas Pelayanan Kesehatan Tingkat Pertama (2022)",
+      "year": 2022,
+      "authority": "Kemenkes RI",
+      "legal_basis": "UU No. 28/2014 Pasal 42",
+      "kepmenkes_number": "HK.01.07/MENKES/1186/2022",
+      "source_url": "https://idisemarang.org/download/ppk-bagi-dokter-di-faskes-tingkat-pertama/?wpdmdl=1011",
+      "cache_path": "catalog/cache/ppk_fktp/ppk-fktp-2022.pdf",
+      "sha256": "93ceb767b10ce1fd3f983383c84a0549d8aaee2725cb2ef944d7141099e99a76",
+      "file_size_bytes": 24014579,
+      "pages": 1379,
+      "language": "id",
+      "status": "ingested",
+      "supersedes": [
+        "ppk-fktp-2015"
+      ],
+      "superseded_by": [],
+      "discovered_at": "2026-04-22T09:09:31.296784Z",
+      "discovered_by": "manual/idi-semarang",
+      "notes": "chunks=1882, lampiran_ii_deferred"
     }
   ]
 }
