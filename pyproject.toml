@@ -1,0 +1,61 @@
+[project]
+name = "anamnesa"
+version = "0.0.1"
+description = "Indonesian clinical guideline retrieval agent"
+requires-python = ">=3.12"
+authors = [{ name = "Rifqi" }]
+dependencies = [
+    "anthropic>=0.40.0",
+    "pydantic>=2.8",
+    "structlog>=24.1",
+    "python-ulid>=3.0",
+    "python-dotenv>=1.0",
+    "httpx>=0.27",
+    # retrieval
+    "lancedb>=0.14",
+    "rank-bm25>=0.2.2",
+    "mcp>=1.2",
+    # ingestion
+    "pdfplumber>=0.11",
+    "pymupdf>=1.24",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.2",
+    "pytest-asyncio>=0.23",
+    "ruff>=0.6",
+    "mypy>=1.11",
+]
+# Real multilingual embedder — pulls in torch, ~2GB download of BGE-M3
+# weights on first use. Only install when you're ready to reindex.
+#     uv pip install -e '.[embeddings]'
+embeddings = [
+    "sentence-transformers>=3.0",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["core", "agents", "mcp", "scripts", "tools"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "B", "UP", "N", "A", "ASYNC", "RUF"]
+ignore = []
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unused_ignores = true
+plugins = ["pydantic.mypy"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+pythonpath = ["."]
