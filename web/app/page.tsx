@@ -1,34 +1,73 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Masthead } from "@/components/Masthead";
 import { QueryInput } from "@/components/QueryInput";
 import { AnswerPanel } from "@/components/AnswerPanel";
+import { HistoryPanel } from "@/components/HistoryPanel";
 import { TraceSidebar } from "@/components/TraceSidebar";
 import { PdfViewer } from "@/components/PdfViewer";
 import { FastSearch } from "@/components/FastSearch";
 import { useQueryStream } from "@/lib/useQueryStream";
-import type { TraceEvent } from "@/lib/types";
+import { useHistory } from "@/lib/useHistory";
+import type { FinalResponse, TraceEvent } from "@/lib/types";
 
 type Mode = "fast" | "agentic";
 interface PdfOpen { docId: string; page: number }
 
 export default function HomePage() {
   const stream = useQueryStream();
+  const history = useHistory();
   const [mode, setMode] = useState<Mode>("fast");
   const [pdf, setPdf] = useState<PdfOpen | null>(null);
+  // Track the query text that produced the currently-visible answer so
+  // the history entry carries the right label. Reset on fresh submit.
+  const currentQueryRef = useRef<string>("");
+  const savedFinalRef = useRef<FinalResponse | null>(null);
+
   const openPdf = useCallback(
     (docId: string, page: number) => setPdf({ docId, page }),
     [],
   );
   const closePdf = useCallback(() => setPdf(null), []);
 
+  const submitAgentic = useCallback(
+    (q: string) => {
+      currentQueryRef.current = q;
+      savedFinalRef.current = null;
+      stream.submit(q);
+    },
+    [stream],
+  );
+
+  // Persist to history when a new final lands. Guard via ref so a
+  // re-render with the same `final` doesn't double-save.
+  useEffect(() => {
+    const fin = stream.final;
+    if (!fin) return;
+    if (savedFinalRef.current === fin) return;
+    savedFinalRef.current = fin;
+    if (currentQueryRef.current) {
+      history.addEntry(currentQueryRef.current, fin);
+    }
+  }, [stream.final, history]);
+
+  const loadHistoryEntry = useCallback(
+    (entry: { query: string; final: FinalResponse }) => {
+      currentQueryRef.current = entry.query;
+      savedFinalRef.current = entry.final;
+      stream.loadFromHistory(entry.final);
+      setMode("agentic");
+    },
+    [stream],
+  );
+
   // Escalate from Fast → Agentic with the current query pre-filled.
   const escalate = useCallback((q: string) => {
     setMode("agentic");
     // Defer one tick so the agentic UI mounts + takes the submit call.
-    setTimeout(() => stream.submit(q), 0);
-  }, [stream]);
+    setTimeout(() => submitAgentic(q), 0);
+  }, [submitAgentic]);
 
   return (
     <main className="min-h-screen">
@@ -50,7 +89,16 @@ export default function HomePage() {
         {mode === "agentic" && (
           <div className="grid grid-cols-12 gap-8 pt-6 pb-16">
             <section className="col-span-12 lg:col-span-8">
-              <QueryInput onSubmit={stream.submit} status={stream.status} />
+              <QueryInput onSubmit={submitAgentic} status={stream.status} />
+
+              {history.entries.length > 0 && (
+                <HistoryPanel
+                  entries={history.entries}
+                  onPick={loadHistoryEntry}
+                  onClear={history.clearAll}
+                  onRemove={history.removeEntry}
+                />
+              )}
 
               {stream.status === "error" && stream.error && (
                 <div className="mt-8 bg-oxblood/5 border border-oxblood/20 rounded-lg p-4 text-body">

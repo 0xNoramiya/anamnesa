@@ -31,6 +31,8 @@ interface UseQueryStreamState {
   error: string | null;
   submit: (query: string) => Promise<void>;
   reset: () => void;
+  /** Restore a previous answer from client-side history without re-running. */
+  loadFromHistory: (final: FinalResponse) => void;
 }
 
 /**
@@ -139,7 +141,18 @@ export function useQueryStream(): UseQueryStreamState {
     }
   }
 
-  return { status, queryId, events, final, error, submit, reset };
+  const loadFromHistory = useCallback((restored: FinalResponse) => {
+    // Cancel any in-flight stream so we don't overwrite the restored view.
+    abortRef.current?.abort();
+    abortRef.current = null;
+    setEvents([]);
+    setError(null);
+    setQueryId(restored.query_id);
+    setFinal(restored);
+    setStatus("done");
+  }, []);
+
+  return { status, queryId, events, final, error, submit, reset, loadFromHistory };
 }
 
 /** Parse one SSE message block ("event: X\ndata: Y"). */

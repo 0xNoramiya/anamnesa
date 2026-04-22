@@ -339,6 +339,8 @@ function Refusal({
         <span className="flex-1 h-px bg-oxblood/30" />
         <span className="chapter-mark text-oxblood">{reason}</span>
       </div>
+      {final.from_cache && <CacheBadge ageSeconds={final.cached_age_s ?? null} />}
+
       <div className="bg-oxblood/5 border border-oxblood/20 rounded-lg p-5">
         <p className="text-body-lg leading-relaxed text-ink">{msg}</p>
         <p className="mt-3 text-caption text-oxblood font-mono uppercase tracking-editorial">
