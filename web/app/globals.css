@@ -53,12 +53,26 @@
   /* Inline citation — superscript numeric marker */
   .cite-marker {
     @apply inline-block font-mono text-[0.62em] align-super leading-none
-           text-civic cursor-pointer
-           transition-colors hover:text-civic-hover;
+           text-civic cursor-pointer rounded-sm
+           transition-all hover:text-civic-hover;
     padding: 0 0.12em;
   }
   .cite-marker::before { content: "["; }
   .cite-marker::after  { content: "]"; }
+
+  /* Bi-directional hover link between inline markers and their
+     reference cards. When the AnswerPanel `hoveredKey` matches, markers
+     get a soft civic halo + slight background so one can see "this is
+     the citation my cursor is tied to" at a glance. */
+  .cite-marker-active {
+    background-color: theme("colors.civic.DEFAULT / 14%");
+    box-shadow: 0 0 0 1.5px theme("colors.civic.DEFAULT / 45%");
+    color: theme("colors.civic.DEFAULT");
+  }
+  .ref-highlight {
+    border-color: theme("colors.civic.DEFAULT / 55%");
+    box-shadow: 0 0 0 3px theme("colors.civic.DEFAULT / 12%");
+  }
 
   /* Document card — one per reference, pasal.id-style */
   .doc-card {

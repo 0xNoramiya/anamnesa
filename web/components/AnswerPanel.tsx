@@ -22,6 +22,11 @@ interface Props {
 }
 
 export function AnswerPanel({ final, queryText, onOpenPdf }: Props) {
+  // Track which citation the user is hovering so we can bidirectionally
+  // halo inline markers and the matching reference card. Lifted here
+  // because BodyProse and the card list are siblings in this component.
+  const [hoveredKey, setHoveredKey] = useState<string | null>(null);
+
   if (!final) return null;
   if (final.refusal_reason) {
     return <Refusal final={final} queryText={queryText} onOpenPdf={onOpenPdf} />;
@@ -52,7 +57,12 @@ export function AnswerPanel({ final, queryText, onOpenPdf }: Props) {
 
       <ExportActions final={final} queryText={queryText} />
 
-      <BodyProse content={final.answer_markdown} indexByKey={indexByKey} />
+      <BodyProse
+        content={final.answer_markdown}
+        indexByKey={indexByKey}
+        hoveredKey={hoveredKey}
+        onHover={setHoveredKey}
+      />
 
       <section className="mt-10">
         <div className="flex items-center gap-3 mb-4">
@@ -66,6 +76,8 @@ export function AnswerPanel({ final, queryText, onOpenPdf }: Props) {
               index={i + 1}
               citation={c}
               flag={flagsByKey.get(c.key)}
+              highlighted={hoveredKey === c.key}
+              onHoverChange={(on) => setHoveredKey(on ? c.key : null)}
               onOpenPdf={onOpenPdf}
             />
           ))}
@@ -82,14 +94,21 @@ export function AnswerPanel({ final, queryText, onOpenPdf }: Props) {
 function BodyProse({
   content,
   indexByKey,
+  hoveredKey,
+  onHover,
 }: {
   content: string;
   indexByKey: Map<string, number>;
+  hoveredKey: string | null;
+  onHover: (key: string | null) => void;
 }) {
   const paragraphs = content
     .split(/\n{2,}/)
     .map((p) => p.trim())
     .filter(Boolean);
+
+  const render = (text: string) =>
+    renderInline(text, indexByKey, hoveredKey, onHover);
 
   return (
     <div className="text-ink">
@@ -102,7 +121,7 @@ function BodyProse({
               key={i}
               className="font-semibold text-ink text-lg mt-8 mb-3"
             >
-              {renderInline(text, indexByKey)}
+              {render(text)}
             </h3>
           );
         }
@@ -110,7 +129,7 @@ function BodyProse({
         // Pipe-delimited markdown tables (GFM-ish). Detect: every
         // non-blank line starts and ends with "|", and the 2nd line is
         // a separator ("| --- | --- |").
-        const tableNodes = maybeRenderTable(p, indexByKey, i);
+        const tableNodes = maybeRenderTable(p, indexByKey, i, hoveredKey, onHover);
         if (tableNodes) return tableNodes;
 
         if (/^[-*]\s+/m.test(p)) {
@@ -122,7 +141,7 @@ function BodyProse({
             <ul key={i} className="my-4 ml-5 list-disc marker:text-civic space-y-1.5">
               {items.map((item, j) => (
                 <li key={j} className="text-body-lg leading-relaxed">
-                  {renderInline(item, indexByKey)}
+                  {render(item)}
                 </li>
               ))}
             </ul>
@@ -130,7 +149,7 @@ function BodyProse({
         }
         return (
           <p key={i} className="text-body-lg leading-relaxed my-4">
-            {renderInline(p, indexByKey)}
+            {render(p)}
           </p>
         );
       })}
@@ -142,6 +161,8 @@ function maybeRenderTable(
   block: string,
   indexByKey: Map<string, number>,
   key: number,
+  hoveredKey: string | null,
+  onHover: (key: string | null) => void,
 ): React.ReactNode | null {
   // Accept both single-line (whole table on one line separated by newlines
   // that got collapsed) and proper multi-line markdown tables.
@@ -182,7 +203,7 @@ function maybeRenderTable(
                 key={hi}
                 className="text-left font-semibold text-ink py-2 px-3 align-bottom"
               >
-                {renderInline(h, indexByKey)}
+                {renderInline(h, indexByKey, hoveredKey, onHover)}
               </th>
             ))}
           </tr>
@@ -195,7 +216,7 @@ function maybeRenderTable(
             >
               {row.map((cell, ci) => (
                 <td key={ci} className="py-2 px-3 align-top text-ink-mid">
-                  {renderInline(cell, indexByKey)}
+                  {renderInline(cell, indexByKey, hoveredKey, onHover)}
                 </td>
               ))}
             </tr>
@@ -226,6 +247,8 @@ function jumpToReference(key: string, event?: React.MouseEvent) {
 function renderInline(
   text: string,
   indexByKey: Map<string, number>,
+  hoveredKey: string | null,
+  onHover: (key: string | null) => void,
 ): React.ReactNode[] {
   const parts: React.ReactNode[] = [];
   const re = /\[\[([^\]]+)\]\]|\*\*([^*]+?)\*\*|(?<!\*)\*([^*\n]+?)\*(?!\*)/g;
@@ -238,12 +261,16 @@ function renderInline(
       const key = match[1];
       const n = indexByKey.get(key);
       const known = n !== undefined;
+      const active = hoveredKey === key;
       parts.push(
         <a
           key={`c-${counter++}`}
           href={`#ref-${key}`}
           onClick={known ? (e) => jumpToReference(key, e) : undefined}
-          className="cite-marker"
+          onMouseEnter={known ? () => onHover(key) : undefined}
+          onMouseLeave={known ? () => onHover(null) : undefined}
+          className={`cite-marker${active ? " cite-marker-active" : ""}`}
+          data-cite-key={key}
           title={known ? `Referensi ${n}: ${key}` : key}
           aria-label={known ? `Lompat ke referensi ${n}` : `Referensi ${key}`}
         >
@@ -273,11 +300,15 @@ function ReferenceCard({
   index,
   citation,
   flag,
+  highlighted,
+  onHoverChange,
   onOpenPdf,
 }: {
   index: number;
   citation: Citation;
   flag?: CurrencyFlag;
+  highlighted?: boolean;
+  onHoverChange?: (on: boolean) => void;
   onOpenPdf?: (docId: string, page: number) => void;
 }) {
   const [copied, setCopied] = useState(false);
@@ -305,7 +336,13 @@ function ReferenceCard({
   };
 
   return (
-    <article id={`ref-${citation.key}`} className="doc-card">
+    <article
+      id={`ref-${citation.key}`}
+      data-cite-key={citation.key}
+      className={`doc-card transition-all${highlighted ? " ref-highlight" : ""}`}
+      onMouseEnter={() => onHoverChange?.(true)}
+      onMouseLeave={() => onHoverChange?.(false)}
+    >
       <div className="flex items-start gap-3 mb-2">
         <div className="flex-shrink-0 font-mono text-sm text-civic font-semibold tabular-nums pt-0.5 w-6 text-right">
           {index}.
