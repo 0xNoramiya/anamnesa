@@ -68,6 +68,7 @@ async def _lifespan(app: FastAPI):
     from agents.verifier import OpusVerifier
     from core.budget import BudgetLimits
     from core.cache import DEFAULT_TTL_SECONDS, AnswerCache
+    from core.feedback import FeedbackStore
     from core.retrieval import default_retriever
     from mcp.client import LocalRetriever
 
@@ -115,10 +116,14 @@ async def _lifespan(app: FastAPI):
     # Lifespan runs once at boot — sync filesystem I/O here is fine.
     manifest = _load_manifest_sync(Path("catalog/manifest.json"))
 
+    feedback_path = Path(os.getenv("ANAMNESA_FEEDBACK_PATH", "catalog/cache/feedback.db"))
+    feedback = FeedbackStore(feedback_path)
+
     app.state.orchestrator = orchestrator
     app.state.hybrid = hybrid         # exposed for /api/search (fast mode)
     app.state.manifest = manifest
     app.state.cache = cache           # exposed for /api/cache/* admin endpoints
+    app.state.feedback = feedback     # thumbs up/down store
     app.state.running_queries = {}    # query_id -> asyncio.Queue
     app.state.tasks = set()           # strong refs to in-flight background tasks
     app.state.version = _detect_version()  # git sha + date; stable at boot
@@ -131,6 +136,7 @@ async def _lifespan(app: FastAPI):
     yield
     if cache is not None:
         cache.close()
+    feedback.close()
 
 
 app = FastAPI(title="Anamnesa", version="0.1.0", lifespan=_lifespan)
@@ -159,6 +165,19 @@ class QueryRequest(BaseModel):
 class QueryCreated(BaseModel):
     query_id: str
     stream_url: str
+
+
+class FeedbackRequest(BaseModel):
+    query_id: str
+    query_text: str
+    rating: str                    # "up" | "down"
+    note: str | None = None
+    answer_sha: str | None = None
+
+
+class FeedbackResponse(BaseModel):
+    id: str
+    stored: bool = True
 
 
 # ---------------------------------------------------------------------------
@@ -290,6 +309,36 @@ async def fast_search(q: str, limit: int = 20) -> dict[str, Any]:
         ],
         "results": [c.model_dump(mode="json") for c in chunks],
     }
+
+
+@app.post("/api/feedback", response_model=FeedbackResponse)
+async def post_feedback(req: FeedbackRequest) -> FeedbackResponse:
+    if req.rating not in ("up", "down"):
+        raise HTTPException(400, "rating must be 'up' or 'down'")
+    if not req.query_id.strip() or not req.query_text.strip():
+        raise HTTPException(400, "query_id and query_text are required")
+    store = getattr(app.state, "feedback", None)
+    if store is None:
+        raise HTTPException(503, "feedback store not initialized")
+    try:
+        entry_id = store.add(
+            query_id=req.query_id.strip(),
+            query_text=req.query_text.strip(),
+            rating=req.rating,
+            note=req.note,
+            answer_sha=req.answer_sha,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    return FeedbackResponse(id=entry_id, stored=True)
+
+
+@app.get("/api/feedback/stats")
+async def feedback_stats() -> dict[str, Any]:
+    store = getattr(app.state, "feedback", None)
+    if store is None:
+        raise HTTPException(503, "feedback store not initialized")
+    return store.stats()
 
 
 @app.post("/api/query", response_model=QueryCreated)

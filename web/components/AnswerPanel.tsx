@@ -13,6 +13,7 @@ import {
   downloadText,
   suggestedFilename,
 } from "@/lib/exportMarkdown";
+import { FeedbackBar } from "./FeedbackBar";
 
 interface Props {
   final: FinalResponse | null;
@@ -70,6 +71,8 @@ export function AnswerPanel({ final, queryText, onOpenPdf }: Props) {
           ))}
         </div>
       </section>
+
+      <FeedbackBar final={final} queryText={queryText} />
 
       <Disclaimer />
     </article>
