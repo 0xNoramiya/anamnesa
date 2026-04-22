@@ -334,11 +334,13 @@ async def post_feedback(req: FeedbackRequest) -> FeedbackResponse:
 
 
 @app.get("/api/feedback/stats")
-async def feedback_stats() -> dict[str, Any]:
+async def feedback_stats(all: int = 0) -> dict[str, Any]:
+    """Stats excludes SMOKE-* entries by default (they're from the prod
+    smoke-test script, not real user feedback). Pass ?all=1 to include."""
     store = getattr(app.state, "feedback", None)
     if store is None:
         raise HTTPException(503, "feedback store not initialized")
-    return store.stats()
+    return store.stats(include_smoke=bool(all))
 
 
 @app.post("/api/query", response_model=QueryCreated)

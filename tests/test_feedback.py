@@ -59,3 +59,24 @@ def test_many_entries_recent_capped_at_20(tmp_path: Path) -> None:
     s = store.stats()
     assert s["total"] == 30
     assert len(s["recent"]) == 20
+
+
+def test_smoke_entries_filtered_by_default(tmp_path: Path) -> None:
+    """Prod smoke-test writes rows with query_id='SMOKE-...'. Default
+    stats should hide them so /admin/feedback shows only real signal."""
+    store = FeedbackStore(tmp_path / "fb.db")
+    store.add(query_id="Q1", query_text="real query", rating="up")
+    store.add(query_id="Q2", query_text="another real", rating="down")
+    store.add(query_id="SMOKE-12345", query_text="prod smoke-test ping", rating="up")
+    store.add(query_id="SMOKE-67890", query_text="prod smoke-test ping", rating="down")
+
+    default = store.stats()
+    assert default["total"] == 2
+    assert default["up"] == 1
+    assert default["down"] == 1
+    assert all(r["query_text"] != "prod smoke-test ping" for r in default["recent"])
+
+    with_smoke = store.stats(include_smoke=True)
+    assert with_smoke["total"] == 4
+    assert with_smoke["up"] == 2
+    assert with_smoke["down"] == 2

@@ -97,17 +97,30 @@ class FeedbackStore:
         )
         return entry_id
 
-    def stats(self) -> dict[str, Any]:
+    def stats(self, *, include_smoke: bool = False) -> dict[str, Any]:
+        """Aggregated stats + the latest 20 rows.
+
+        `include_smoke=False` (default) filters out entries whose
+        `query_id` starts with ``SMOKE-`` — those are written by the
+        prod smoke-test (`scripts/smoke_prod.py`) and aren't real user
+        feedback. Pass True for debugging.
+        """
+        where = "" if include_smoke else " WHERE query_id NOT LIKE 'SMOKE-%'"
+        where_and = (
+            "" if include_smoke else " AND query_id NOT LIKE 'SMOKE-%'"
+        )
         with self._lock:
-            total = self._conn.execute("SELECT COUNT(*) FROM feedback").fetchone()[0]
+            total = self._conn.execute(
+                f"SELECT COUNT(*) FROM feedback{where}"
+            ).fetchone()[0]
             up = self._conn.execute(
-                "SELECT COUNT(*) FROM feedback WHERE rating='up'"
+                f"SELECT COUNT(*) FROM feedback WHERE rating='up'{where_and}"
             ).fetchone()[0]
             down = self._conn.execute(
-                "SELECT COUNT(*) FROM feedback WHERE rating='down'"
+                f"SELECT COUNT(*) FROM feedback WHERE rating='down'{where_and}"
             ).fetchone()[0]
             recent_rows = self._conn.execute(
-                "SELECT query_text, rating, note, created_at FROM feedback "
+                f"SELECT query_text, rating, note, created_at FROM feedback{where} "
                 "ORDER BY created_at DESC LIMIT 20"
             ).fetchall()
         return {

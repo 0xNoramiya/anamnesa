@@ -24,13 +24,14 @@ export default function FeedbackAdminPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [refreshedAt, setRefreshedAt] = useState<number | null>(null);
+  const [includeSmoke, setIncludeSmoke] = useState(false);
 
-  const load = async () => {
+  const load = async (opts: { includeSmoke: boolean }) => {
     try {
-      const r = await fetch(
-        `${API_BASE.replace(/\/$/, "")}/api/feedback/stats`,
-        { cache: "no-store" },
-      );
+      const url =
+        `${API_BASE.replace(/\/$/, "")}/api/feedback/stats` +
+        (opts.includeSmoke ? "?all=1" : "");
+      const r = await fetch(url, { cache: "no-store" });
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const j = (await r.json()) as Stats;
       setStats(j);
@@ -42,10 +43,10 @@ export default function FeedbackAdminPage() {
   };
 
   useEffect(() => {
-    void load();
-    const h = window.setInterval(load, REFRESH_MS);
+    void load({ includeSmoke });
+    const h = window.setInterval(() => load({ includeSmoke }), REFRESH_MS);
     return () => window.clearInterval(h);
-  }, []);
+  }, [includeSmoke]);
 
   const satisfaction = stats && stats.total > 0 ? (stats.up / stats.total) * 100 : null;
 
@@ -94,9 +95,18 @@ export default function FeedbackAdminPage() {
         )}
 
         <section>
-          <div className="flex items-center gap-3 mb-3">
+          <div className="flex items-center gap-3 mb-3 flex-wrap">
             <h2 className="chapter-mark">Riwayat Terbaru</h2>
             <span className="flex-1 h-px bg-paper-edge" />
+            <label className="inline-flex items-center gap-1.5 text-caption font-mono uppercase tracking-editorial text-ink-faint cursor-pointer">
+              <input
+                type="checkbox"
+                checked={includeSmoke}
+                onChange={(e) => setIncludeSmoke(e.target.checked)}
+                className="accent-civic"
+              />
+              Tampilkan smoke test
+            </label>
             <span className="text-caption text-ink-faint font-mono">
               {refreshedAt ? `diperbarui ${timeAgo(Date.now() - refreshedAt)}` : "memuat…"}
             </span>
