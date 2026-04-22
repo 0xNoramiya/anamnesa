@@ -38,10 +38,11 @@ Anamnesa is my attempt to replace that 3am Ctrl-F session.
 
 | | |
 |---|---|
-| **Eval pass rate** | **20 / 20 (100%)** on 20 ED/GP scenarios drawn from my actual shifts |
+| **Eval pass rate** | **23 / 23 (100%)** on 23 ED/GP scenarios — 17 grounded, 3 aging, 3 absent — drawn from my actual shifts |
 | **Hallucinated citations** | **0** across every run to date |
 | **Corpus ingested** | **80 documents, 8,864 structured chunks** — PPK FKTP 2015 + 2022 (both Lampiran I condition PPKs **and** Lampiran II procedural skills) + 78 PNPKs from the Kemenkes archive |
 | **Retrieval quality** | Hybrid BGE-M3 (1,024-dim multilingual) + rank-bm25, reciprocal-rank fusion, 1M-context Verifier re-read |
+| **Wall-clock (Mode Agen)** | ~130s live / ~0s on cache hit (24h SQLite cache keyed on the raw query) |
 | **Legal basis** | UU No. 28/2014 Pasal 42 — every cited document is Kepmenkes-adopted and therefore public domain |
 
 ---
@@ -64,24 +65,49 @@ Full four-agent pipeline for synthesis:
    structured query; refuses clearly when out of medical scope or when
    the user asks for per-patient dosing decisions.
 2. **Retriever** — MCP-tool-exposed LanceDB + BM25 hybrid; no LLM.
-3. **Drafter** (Opus 4.7, adaptive thinking, xhigh effort) — composes a
+3. **Drafter** (Opus 4.7, adaptive thinking, `high` effort) — composes a
    cited Bahasa answer via tool-use. Can self-loop with narrower
    retrieval if the initial chunks are insufficient. **MUST NOT invent
    citations.**
-4. **Verifier** (Opus 4.7, 1M context) — independently re-reads every
-   cited chunk, classifies each claim as `supported | partial |
-   unsupported`, calls `check_supersession` on every `doc_id` to attach
-   a currency flag (`current | aging | superseded | withdrawn`).
-   If any claim is unsupported the Drafter gets **one** retry; after
-   that the whole answer is refused.
+4. **Verifier** (Opus 4.7, 1M context, `high` effort) — independently
+   re-reads every cited chunk, classifies each claim as
+   `supported | partial | unsupported`, calls `check_supersession` on
+   every `doc_id` to attach a currency flag (`current | aging |
+   superseded | withdrawn`). If any claim is unsupported the Drafter
+   gets **one** retry; after that the whole answer is refused.
 
-Every agent event streams to the UI as a live trace while the user
-watches — normalizer → retriever → drafter → verifier, colour-coded
-per agent. Without this panel, the agentic work is invisible and the
-product looks like a ChatGPT clone.
+Every agent event streams to the UI as a collapsible phase trace —
+normalizer → retriever → drafter → verifier, colour-coded per agent.
+Without this panel, the agentic work is invisible and the product
+looks like a ChatGPT clone.
 
-Total wall-clock on a typical Mode Agen query: ~150 seconds. Cost:
-$0.40–0.80 per answer at Opus rates.
+Total wall-clock on a typical Mode Agen query: **~130 seconds live**
+(down from ~220s at `xhigh` effort — A/B benchmarked) and **~0 seconds
+on cache hit**. Cost: $0.40–0.80 per answer at Opus rates; cached
+repeats are free.
+
+### Mode Agen · answer UX
+
+Beyond the agent loop itself, every successful answer carries:
+
+- **Inline `[N]` citations that scroll-and-flash to their reference card**
+  on click, with **bidirectional hover-highlighting** so you can see at
+  a glance which prose claim maps to which source.
+- **Per-citation "Salin kutipan"** (copy chunk + provenance) and
+  per-answer **"Salin" + "Unduh .md"** so you can paste into shift
+  notes with `[^N]` footnotes + verbatim chunk quotes intact.
+- **"Dari cache · X menit lalu"** badge when the answer came from the
+  24h SQLite cache — provenance-honest, not hidden.
+- **👍 / 👎 feedback** with optional note field, stored server-side in
+  `catalog/cache/feedback.db`; an `/admin/feedback` dashboard auto-
+  refreshes every 30s so I can see which answers are helping in real
+  shifts and which need corpus work.
+- **Client-side "Riwayat"** — last 20 queries in localStorage; tap any
+  entry to restore the full answer without re-running the pipeline.
+- **"Why refused" hint** — when the Drafter refuses `corpus_silent`,
+  the UI surfaces the top 3 near-miss chunks the Retriever *did* find,
+  so the user can see that Anamnesa searched and judge the gap for
+  themselves instead of wondering if the app broke.
 
 ---
 
@@ -149,8 +175,9 @@ a VPS.
 ## Open work (7-day build has edges)
 
 - **Cost.** Currently $0.40–$0.80/query, over CLAUDE.md's stated $0.20
-  target. Achievable by Haiku'ing some Verifier partials and aggressive
-  prompt caching. Not done for the hackathon.
+  target. Answer cache makes repeat queries free, and dropping from
+  `xhigh` to `high` effort cut wall-clock by ~42%. Remaining paths:
+  Haiku'ing simple Verifier claims, aggressive prompt-cache hits.
 - **Watermark bleed.** Some PDFs carry diagonal rotated watermarks
   that pdfplumber interleaves into text, producing cosmetic slug noise
   on Lampiran II chunks. Body-text content still recoverable; the
@@ -158,8 +185,9 @@ a VPS.
   retrofitted here.
 - **q010 apnea-of-prematurity.** The corpus genuinely lacks a PNPK for
   this condition with caffeine/methylxanthine dosing. Currently
-  correctly refused. Would be a great addition if the perhimpunan
-  konsensus route opens up.
+  correctly refused — and the "why refused" card now shows the near-
+  miss chunks so users can confirm the gap. Would be a great addition
+  if the perhimpunan konsensus route opens up.
 
 ---
 
@@ -171,14 +199,19 @@ a VPS.
 - **Backend:** FastAPI 0.136, Pydantic v2, structlog, sse-starlette.
 - **Retrieval:** LanceDB 0.14 + rank-bm25 + sentence-transformers BGE-M3.
 - **Agents:** Anthropic Python SDK 0.40, Opus 4.7 (adaptive thinking +
-  xhigh effort) for Drafter + Verifier, Haiku 4.5 for Normalizer.
+  `high` effort) for Drafter + Verifier, Haiku 4.5 for Normalizer.
+  Effort + model routing env-driven so they can be re-tuned without
+  a redeploy.
+- **Persistence:** SQLite for the 24h answer cache (keyed on raw user
+  query → skips Normalizer+Retriever+Drafter+Verifier on a hit) and
+  for thumbs-feedback rows. No external DB.
 - **Corpus:** 79 Pasal-42 PDFs from kemkes.go.id + IDI Semarang,
   committed to GitHub as structured chunks (PDFs themselves gitignored
   to keep the repo light — regenerable via `agents/prompts/crawler.md`).
 - **Deploy:** Ubuntu 22.04, nginx (SSE-safe proxy config), systemd
   services, Let's Encrypt auto-renew, no Cloudflare proxy (100-second
   timeout would cut Mode Agen streams short).
-- **Tests:** 120 passing. Ruff clean.
+- **Tests:** 146 passing. Ruff clean.
 
 ---
 
