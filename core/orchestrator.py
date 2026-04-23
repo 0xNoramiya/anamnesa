@@ -175,6 +175,36 @@ class Orchestrator:
                 state.normalized_query, next_filters, attempt_num=attempt_num
             )
             state.append_retrieval(attempt)
+            # Include top-5 chunk previews so the UI can surface something
+            # concrete ~5s into a query (instead of making the user wait
+            # the full 120-180s for the Drafter + Verifier to finish).
+            # Text is trimmed to 220 chars and whitespace-collapsed to keep
+            # the SSE envelope small.
+            chunk_previews = []
+            for chunk in attempt.chunks[:5]:
+                text = " ".join(chunk.text.split())
+                if len(text) > 220:
+                    text = text[:219] + "…"
+                chunk_previews.append(
+                    {
+                        "doc_id": chunk.doc_id,
+                        "page": chunk.page,
+                        "section_slug": chunk.section_slug,
+                        "year": chunk.year,
+                        "source_type": chunk.source_type,
+                        "score": round(chunk.score, 3),
+                        "excerpt": text,
+                    }
+                )
+            # Aggregate per-doc hit counts for a one-line "X docs · Y hits"
+            # label the UI can show while the Drafter is thinking.
+            per_doc: dict[str, int] = {}
+            for chunk in attempt.chunks:
+                per_doc[chunk.doc_id] = per_doc.get(chunk.doc_id, 0) + 1
+            doc_summary = [
+                {"doc_id": d, "hits": n}
+                for d, n in sorted(per_doc.items(), key=lambda kv: -kv[1])[:6]
+            ]
             state.append_trace(
                 trace(
                     "retriever",
@@ -183,6 +213,8 @@ class Orchestrator:
                         "attempt": attempt_num,
                         "chunks": len(attempt.chunks),
                         "filters": next_filters.model_dump(exclude_none=True),
+                        "previews": chunk_previews,
+                        "docs": doc_summary,
                     },
                     latency_ms=attempt.latency_ms,
                 )

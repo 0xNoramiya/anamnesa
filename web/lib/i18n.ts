@@ -140,6 +140,14 @@ const ID: Dict = {
   "page.trace.reason_label": "ALASAN",
   "page.trace.footer_note":
     "Jejak per-fase hanya dipancarkan secara langsung ke trace-rail saat kueri aktif. Riwayat ini merekonstruksi hasil akhir dari cache lokal.",
+
+  // Retrieval preview (shown while Drafter + Verifier still running)
+  "preview.title": "Dokumen yang sedang diperiksa",
+  "preview.sub":
+    "Retriever menemukan potongan di bawah ini. Drafter sedang menyusun jawaban tersitasi — Anda bisa membaca sumbernya sambil menunggu.",
+  "preview.hits": "potongan",
+  "preview.docs": "dokumen",
+  "preview.open_pdf": "Buka PDF",
 };
 
 const EN: Dict = {
@@ -257,6 +265,13 @@ const EN: Dict = {
   "page.trace.reason_label": "REASON",
   "page.trace.footer_note":
     "Per-phase events are only emitted live to the trace rail while a query is active. This view reconstructs the final outcome from the local cache.",
+
+  "preview.title": "Documents under review",
+  "preview.sub":
+    "The retriever surfaced these passages. The drafter is composing the cited answer — you can start reading the sources while you wait.",
+  "preview.hits": "hits",
+  "preview.docs": "documents",
+  "preview.open_pdf": "Open PDF",
 };
 
 const DICTS: Record<Lang, Dict> = { id: ID, en: EN };
