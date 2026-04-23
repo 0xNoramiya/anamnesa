@@ -34,6 +34,93 @@ MAX_OUTPUT_TOKENS = 800
 PROMPT_PATH = Path(__file__).parent / "prompts" / "normalizer.md"
 
 
+# ---------------------------------------------------------------------------
+# Pre-LLM heuristic — catch obvious non-clinical queries without paying the
+# Haiku round-trip. Conservative by design: we only short-circuit queries
+# that are unambiguously not medical. Anything that COULD be clinical still
+# goes to Haiku.
+# ---------------------------------------------------------------------------
+
+# Whole-word / phrase hits that are unambiguously non-clinical. Keeping
+# the list deliberately short — each hit must be a true non-medical
+# signal in every realistic Indonesian context. Mixed with "_prefix" for
+# startswith checks to catch imperative openers.
+_NON_MEDICAL_PHRASES: tuple[str, ...] = (
+    # Greetings / chit-chat
+    "apa kabar", "selamat pagi", "selamat siang", "selamat sore",
+    "selamat malam", "terima kasih", "hi ", "hello ", "halo ",
+    # Jokes / entertainment
+    "tell me a joke", "ceritakan lelucon", "tolong buat lelucon",
+    # Cooking / recipes (only as the subject — "resep" alone is clinical!)
+    "resep nasi", "resep masakan", "resep kue", "resep soto",
+    "resep ayam", "resep sambal", "resep mie", "resep rendang",
+    # Weather / geography
+    "cuaca ", "suhu jakarta", "suhu bandung", "ibukota ",
+    "capital of ", "what is the weather",
+    # Coding / software
+    "write code", "write a function", "python function", "sql query",
+    "regex untuk", "tulis kode", "buat script", "javascript code",
+    # Money / business
+    "harga emas", "harga saham", "kurs dollar", "rate usd",
+    "tips jualan", "cara dagang",
+    # Current events / news
+    "presiden sekarang", "berita terbaru", "news today",
+    # Math / arithmetic (outside dosage calc context)
+    "berapa 1+1", "berapa 2+2", "what is 2+2", "1 plus 1",
+)
+
+# Common medical tokens — if ANY appear in the query, we do NOT short-
+# circuit. Prevents false positives like "resep asam mefenamat" (a
+# prescription query that starts with "resep" but is clinical).
+_CLINICAL_SAFETY_TOKENS: frozenset[str] = frozenset({
+    # Conditions
+    "dbd", "demam", "dengue", "tb", "tuberkulosis", "hipertensi",
+    "diabetes", "dm", "stroke", "infark", "asma", "ppok", "sepsis",
+    "pneumonia", "ispa", "gagal", "jantung", "ginjal", "hepar",
+    "covid", "hiv", "malaria", "tifoid", "cacar", "campak",
+    # Anatomy
+    "jantung", "paru", "ginjal", "hati", "lambung", "usus", "otak",
+    "tulang", "sendi", "mata", "telinga", "hidung", "kulit",
+    # Drug stems
+    "amoksisilin", "parasetamol", "ibuprofen", "metformin",
+    "insulin", "oat", "rhze", "antibiotik", "analgetik", "nsaid",
+    "kortikosteroid", "furosemid", "ramipril", "amlodipin",
+    "mg/kg", "mg/kgbb", "mcg", "unit/kg", "dosis",
+    # Procedures
+    "vtp", "rjp", "cpr", "iv", "im", "sc", "po", "pct",
+    # Populations / intents
+    "pasien", "anak", "bayi", "balita", "neonatus", "ibu hamil",
+    "hamil", "lansia", "geriatri",
+    "tata laksana", "tatalaksana", "tatalaksana", "diagnosis",
+    "rujukan", "tanda", "gejala", "sindrom", "keluhan",
+})
+
+
+def _is_obviously_non_medical(query: str) -> bool:
+    """Return True when the query is almost certainly not clinical.
+    Conservative: false negatives (clinical queries mis-classified as
+    non-medical) are MUCH worse than false positives (non-medical
+    queries that go through to Haiku), so when in doubt we return
+    False. Only when (a) a non-medical phrase hits AND (b) zero
+    clinical tokens appear do we short-circuit.
+    """
+    text = query.lower().strip()
+    if not text:
+        return False
+    # Short-circuit trivially-empty / numeric-only queries.
+    if text.isnumeric():
+        return True
+    # Must hit a non-medical phrase...
+    hit = any(phrase in text for phrase in _NON_MEDICAL_PHRASES)
+    if not hit:
+        return False
+    # ...AND have zero clinical safety tokens.
+    for tok in _CLINICAL_SAFETY_TOKENS:
+        if tok in text:
+            return False
+    return True
+
+
 class NormalizerPromptError(RuntimeError):
     """Raised if the system prompt file is missing or unreadable."""
 
@@ -187,6 +274,18 @@ class HaikuNormalizer:
     async def run(self, state: QueryState) -> NormalizerResult:
         user_query = state.original_query
         started = time.perf_counter()
+
+        # Pre-LLM fast-path: unambiguously non-medical queries skip the
+        # Haiku round-trip entirely and return a refusal in ~0ms. Only
+        # fires when we're confident — see _is_obviously_non_medical.
+        if _is_obviously_non_medical(user_query):
+            log.info(
+                "normalizer.heuristic_refuse",
+                reason="out_of_medical_scope",
+                input_length=len(user_query),
+            )
+            self.last_usage = {"input_tokens": 0, "output_tokens": 0, "thinking_tokens": 0}
+            return NormalizerRefusal(RefusalReason.OUT_OF_MEDICAL_SCOPE)
 
         # Anthropic's Python SDK `messages.create` is synchronous. We run
         # inside an async agent Protocol but do not await — the SDK call
