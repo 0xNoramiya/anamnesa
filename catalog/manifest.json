@@ -1689,6 +1689,27 @@
       "discovered_at": "2026-04-22T09:09:31.296784Z",
       "discovered_by": "manual/idi-semarang",
       "notes": "chunks=2500, lampiran_ii_chunks=621"
+    },
+    {
+      "doc_id": "fornas-2023",
+      "source_type": "fornas",
+      "title": "Formularium Nasional (Kepmenkes HK.01.07/MENKES/2197/2023)",
+      "year": 2023,
+      "authority": "Kemenkes RI",
+      "legal_basis": "UU No. 28/2014 Pasal 42",
+      "kepmenkes_number": "HK.01.07/MENKES/2197/2023",
+      "source_url": "https://farmalkes.kemkes.go.id/en/unduh/kepmenkes-2197-2023/",
+      "cache_path": "catalog/cache/fornas/fornas-2023.pdf",
+      "sha256": null,
+      "file_size_bytes": 1799757,
+      "pages": 219,
+      "language": "id",
+      "status": "indexed",
+      "supersedes": [],
+      "superseded_by": [],
+      "discovered_at": "2026-04-23T00:00:00+00:00",
+      "discovered_by": "scripts.ingest_fornas",
+      "notes": "Formularium Nasional — BPJS formulary. Ingested via pdfplumber per-page chunking."
     }
   ]
 }
