@@ -96,6 +96,11 @@ const ID: Dict = {
   "landing.demo.a_html":
     "Rujuk bila pasien menunjukkan tanda syok (tekanan nadi ≤ 20 mmHg, akral dingin, CRT &gt; 2 detik)<sup>[1]</sup>, perdarahan spontan masif<sup>[2]</sup>, atau trombosit turun &lt; 100.000 dengan hematokrit meningkat ≥ 20% dari baseline<sup>[1]</sup>.",
   "landing.demo.meta": "2 sitasi · PPK FKTP",
+  "landing.demo.followup_label": "LANJUTAN",
+  "landing.demo.q2": "dan kalau anak?",
+  "landing.demo.a2_html":
+    "Pada anak, rujuk segera bila usia &lt; 1 tahun, terdapat syok (derajat III/IV), atau muncul <em>warning signs</em> — letargi, muntah persisten, nyeri abdomen hebat, hepatomegali &gt; 2 cm, atau hematokrit meningkat disertai trombositopenia cepat<sup>[3]</sup>.",
+  "landing.demo.meta2": "1 sitasi · PNPK Dengue Anak 2021",
   "landing.legal.eyebrow": "DASAR HUKUM",
   "landing.legal.body_html":
     "<strong>UU No. 28/2014 Pasal 42</strong> menetapkan peraturan perundang-undangan dan keputusan pejabat pemerintah sebagai <em>public domain</em>. Anamnesa hanya mengindeks dokumen yang sah disebar ulang — PPK FKTP, PNPK, dan Kepmenkes.",
@@ -266,6 +271,11 @@ const EN: Dict = {
   "landing.demo.a_html":
     "Refer if the patient shows signs of shock (pulse pressure ≤ 20 mmHg, cold extremities, CRT &gt; 2 s)<sup>[1]</sup>, major spontaneous bleeding<sup>[2]</sup>, or platelets dropping below 100,000 with hematocrit rising ≥ 20% from baseline<sup>[1]</sup>.",
   "landing.demo.meta": "2 citations · PPK FKTP",
+  "landing.demo.followup_label": "FOLLOW-UP",
+  "landing.demo.q2": "and for children?",
+  "landing.demo.a2_html":
+    "For children, refer immediately if age &lt; 1 year, shock is present (grade III/IV), or <em>warning signs</em> appear — lethargy, persistent vomiting, severe abdominal pain, hepatomegaly &gt; 2 cm, or rising hematocrit with rapid thrombocytopenia<sup>[3]</sup>.",
+  "landing.demo.meta2": "1 citation · PNPK Dengue Anak 2021",
   "landing.legal.eyebrow": "LEGAL BASIS",
   "landing.legal.body_html":
     "<strong>Indonesian Law No. 28/2014, Article 42</strong> places government regulations and official decisions in the <em>public domain</em>. Anamnesa only indexes documents that can lawfully be redistributed — PPK FKTP, PNPK, and Kepmenkes.",

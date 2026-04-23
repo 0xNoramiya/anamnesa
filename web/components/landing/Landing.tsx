@@ -364,6 +364,117 @@ function LandingDemo() {
             />
           </div>
         </div>
+
+        {/* Follow-up turn — visualizes the multi-turn flow inside the same
+            card so judges see the feature without clicking through. */}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: 10,
+            padding: "0 22px",
+          }}
+        >
+          <div style={{ flex: 1, height: 1, background: "var(--rule)" }} />
+          <span
+            className="mono"
+            style={{
+              fontSize: 10,
+              color: "var(--ink-3)",
+              letterSpacing: "0.16em",
+              padding: "2px 0",
+            }}
+          >
+            {t("landing.demo.followup_label")}
+          </span>
+          <div style={{ flex: 1, height: 1, background: "var(--rule)" }} />
+        </div>
+
+        <div
+          style={{
+            padding: "16px 22px",
+            borderBottom: "1px solid var(--rule)",
+            display: "flex",
+            alignItems: "flex-start",
+            gap: 12,
+          }}
+        >
+          <span
+            className="mono"
+            style={{
+              fontSize: 10,
+              color: "var(--navy)",
+              letterSpacing: "0.12em",
+              paddingTop: 3,
+              minWidth: 28,
+            }}
+          >
+            Q2
+          </span>
+          <div style={{ flex: 1 }}>
+            <div
+              className="label"
+              style={{ marginBottom: 4, color: "var(--ink-3)" }}
+            >
+              {t("landing.demo.q_label")}
+            </div>
+            <div
+              style={{
+                fontSize: 15,
+                color: "var(--ink)",
+                lineHeight: 1.5,
+                fontStyle: "italic",
+              }}
+            >
+              {t("landing.demo.q2")}
+            </div>
+          </div>
+        </div>
+
+        <div style={{ padding: "18px 22px" }}>
+          <div className="label" style={{ marginBottom: 8 }}>
+            {t("landing.demo.a_label")}
+          </div>
+          <div
+            style={{
+              fontSize: 15,
+              lineHeight: 1.65,
+              color: "var(--ink)",
+            }}
+            dangerouslySetInnerHTML={{
+              __html: t("landing.demo.a2_html").replace(
+                /<sup>\[(\d+)\]<\/sup>/g,
+                (_m, n) => `<span class="cite">${n}</span>`,
+              ),
+            }}
+          />
+
+          <div
+            style={{
+              marginTop: 14,
+              display: "flex",
+              gap: 8,
+              flexWrap: "wrap",
+              alignItems: "center",
+            }}
+          >
+            <CurrencyChip kind="current" year={2021} />
+            <span
+              className="mono"
+              style={{ fontSize: 10.5, color: "var(--ink-3)" }}
+            >
+              {t("landing.demo.meta2")}
+            </span>
+          </div>
+
+          <div style={{ marginTop: 16 }}>
+            <MiniRef
+              n={3}
+              doc="PNPK Dengue Anak 2021 · Warning signs"
+              page="hal. 9"
+            />
+          </div>
+        </div>
       </div>
     </section>
   );
