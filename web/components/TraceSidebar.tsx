@@ -27,10 +27,23 @@ interface Props {
  * collapsed. User can click to toggle any phase.
  */
 export function TraceSidebar({ events, status }: Props) {
-  const bottomRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Scroll only the inner container — never the window. `scrollIntoView`
+  // bubbles up through every scrollable ancestor, which during the
+  // 60-90s Drafter phase pulls the reader's main column to the top on
+  // every new trace event. Touching `scrollTop` directly isolates the
+  // effect to this panel. We also skip the scroll when the user is
+  // reading earlier events (i.e. they scrolled up) — detected by a
+  // <120px gap from the current bottom.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+    const el = scrollRef.current;
+    if (!el) return;
+    const nearBottom =
+      el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+    if (nearBottom) {
+      el.scrollTop = el.scrollHeight;
+    }
   }, [events.length]);
 
   const groups = useMemo(() => buildGroups(events), [events]);
@@ -52,7 +65,10 @@ export function TraceSidebar({ events, status }: Props) {
         </p>
       </header>
 
-      <div className="flex-1 overflow-y-auto px-4 py-3 no-scrollbar">
+      <div
+        ref={scrollRef}
+        className="flex-1 overflow-y-auto px-4 py-3 no-scrollbar"
+      >
         {events.length === 0 && <EmptyState status={status} />}
         {events.length > 0 && (
           <ol className="space-y-2.5">
@@ -63,7 +79,6 @@ export function TraceSidebar({ events, status }: Props) {
                 isLast={i === groups.length - 1}
               />
             ))}
-            <div ref={bottomRef} />
           </ol>
         )}
       </div>

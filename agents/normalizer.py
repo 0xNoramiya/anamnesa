@@ -188,6 +188,43 @@ def _parse_usage(response: Any, model_id: str) -> dict[str, Any]:
     }
 
 
+def _extract_first_json_object(text: str) -> str | None:
+    """Scan `text` for the first balanced {...} block and return it.
+
+    Tolerates strings containing braces (and their escapes) so prose
+    like `He said "{foo}" then {...json...}` doesn't false-match on
+    the embedded brace pair. Returns None if no balanced object is
+    found.
+    """
+    depth = 0
+    start = -1
+    in_string = False
+    escape = False
+    for i, ch in enumerate(text):
+        if in_string:
+            if escape:
+                escape = False
+            elif ch == "\\":
+                escape = True
+            elif ch == '"':
+                in_string = False
+            continue
+        if ch == '"':
+            in_string = True
+            continue
+        if ch == "{":
+            if depth == 0:
+                start = i
+            depth += 1
+        elif ch == "}":
+            if depth == 0:
+                continue
+            depth -= 1
+            if depth == 0 and start >= 0:
+                return text[start : i + 1]
+    return None
+
+
 def _parse_model_output(raw: str) -> NormalizerResult | None:
     """Parse the model's JSON text into a NormalizerResult.
 
@@ -205,10 +242,20 @@ def _parse_model_output(raw: str) -> NormalizerResult | None:
             raw = raw[4:]
         raw = raw.strip()
 
+    payload: Any
     try:
         payload = json.loads(raw)
     except json.JSONDecodeError:
-        return None
+        # Fallback: extract the first balanced {...} block from wrapping
+        # prose. Happens when Haiku narrates briefly before emitting JSON
+        # (e.g. on oddly-shaped meta queries like "Ringkaskan dokumen X").
+        extracted = _extract_first_json_object(raw)
+        if extracted is None:
+            return None
+        try:
+            payload = json.loads(extracted)
+        except json.JSONDecodeError:
+            return None
     if not isinstance(payload, dict):
         return None
 
