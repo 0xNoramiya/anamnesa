@@ -44,16 +44,16 @@ class Config:
 
 CONFIGS = [
     Config(
-        label="baseline (Opus high / Opus high)",
+        label="shipped (Opus high / Haiku 4.5)",
         drafter_model="claude-opus-4-7",
         drafter_effort="high",
-        verifier_model="claude-opus-4-7",
+        verifier_model="claude-haiku-4-5-20251001",
         verifier_effort="high",
     ),
     Config(
-        label="haiku-verifier (Opus high / Haiku 4.5)",
+        label="aggressive (Opus medium / Haiku 4.5)",
         drafter_model="claude-opus-4-7",
-        drafter_effort="high",
+        drafter_effort="medium",
         verifier_model="claude-haiku-4-5-20251001",
         verifier_effort="high",
     ),
