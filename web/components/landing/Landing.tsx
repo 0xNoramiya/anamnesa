@@ -192,6 +192,8 @@ function LandingFeatures() {
     { title: t("landing.features.cited.title"), body: t("landing.features.cited.body") },
     { title: t("landing.features.flags.title"), body: t("landing.features.flags.body") },
     { title: t("landing.features.refuse.title"), body: t("landing.features.refuse.body") },
+    { title: t("landing.features.multiturn.title"), body: t("landing.features.multiturn.body") },
+    { title: t("landing.features.fornas.title"), body: t("landing.features.fornas.body") },
   ];
 
   return (
@@ -206,7 +208,8 @@ function LandingFeatures() {
       <div
         style={{
           display: "grid",
-          gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))",
+          // 5 items: 3+2 on wide, 2+2+1 on tablet, 1 per row on narrow.
+          gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))",
           gap: 20,
         }}
       >

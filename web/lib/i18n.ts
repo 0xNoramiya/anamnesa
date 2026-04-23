@@ -81,6 +81,12 @@ const ID: Dict = {
   "landing.features.refuse.title": "Penolakan, bukan halusinasi",
   "landing.features.refuse.body":
     "Bila korpus tidak memuat jawaban, Anamnesa menolak menjawab dan menampilkan dokumen paling dekat yang sempat ditemukan.",
+  "landing.features.multiturn.title": "Pertanyaan lanjutan",
+  "landing.features.multiturn.body":
+    "Tanya lanjutan singkat — \"dan kalau anak?\", \"dosisnya berapa?\" — Anamnesa ingat konteks sebelumnya dan menyitasi pedoman yang tepat untuk populasi baru.",
+  "landing.features.fornas.title": "Pencarian Fornas instan",
+  "landing.features.fornas.body":
+    "Cek status BPJS sebuah obat dalam satu ketukan: Fornas 2023 + halaman + disebut di mana saja dalam pedoman lain.",
   "landing.demo.eyebrow": "CONTOH",
   "landing.demo.h2": "Satu pertanyaan, satu jawaban tersitasi.",
   "landing.demo.q_label": "Pertanyaan",
@@ -245,6 +251,12 @@ const EN: Dict = {
   "landing.features.refuse.title": "Refusal, not hallucination",
   "landing.features.refuse.body":
     "When the corpus doesn't cover the question, Anamnesa refuses to answer and shows the closest documents it did find.",
+  "landing.features.multiturn.title": "Follow-up questions",
+  "landing.features.multiturn.body":
+    "Ask terse follow-ups — \"and for children?\", \"what's the dose?\" — Anamnesa keeps prior context and cites the right guideline for the new population.",
+  "landing.features.fornas.title": "Instant Fornas lookup",
+  "landing.features.fornas.body":
+    "Check a drug's BPJS status in one tap: Fornas 2023 + page + mentions across other guidelines.",
   "landing.demo.eyebrow": "EXAMPLE",
   "landing.demo.h2": "One question, one cited answer.",
   "landing.demo.q_label": "Question",
