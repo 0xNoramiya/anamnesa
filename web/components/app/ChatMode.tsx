@@ -15,6 +15,56 @@ interface PdfOpen { docId: string; page: number }
 
 interface Turn { query: string; final: FinalResponse }
 
+/** localStorage persistence for the chat thread. A shipped multi-turn
+ *  feature that forgets its conversation on page refresh is fragile —
+ *  one accidental reload and the context is gone. We persist a capped
+ *  tail of the thread plus a savedAt timestamp; restoration expires
+ *  after THREAD_TTL_MS so coming back the next day doesn't silently
+ *  chain an unrelated new question onto yesterday's DBD discussion. */
+const THREAD_STORAGE_KEY = "anamnesa.chat_thread";
+const THREAD_MAX_TURNS = 5;
+const THREAD_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+interface PersistedThread {
+  thread: Turn[];
+  savedAt: number;
+}
+
+function loadPersistedThread(): Turn[] | null {
+  try {
+    const raw = window.localStorage.getItem(THREAD_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as PersistedThread;
+    if (!parsed || !Array.isArray(parsed.thread) || parsed.thread.length === 0) {
+      return null;
+    }
+    if (typeof parsed.savedAt !== "number" ||
+        Date.now() - parsed.savedAt > THREAD_TTL_MS) {
+      window.localStorage.removeItem(THREAD_STORAGE_KEY);
+      return null;
+    }
+    return parsed.thread;
+  } catch {
+    return null;
+  }
+}
+
+function savePersistedThread(thread: Turn[]): void {
+  try {
+    if (thread.length === 0) {
+      window.localStorage.removeItem(THREAD_STORAGE_KEY);
+      return;
+    }
+    const payload: PersistedThread = {
+      thread: thread.slice(-THREAD_MAX_TURNS),
+      savedAt: Date.now(),
+    };
+    window.localStorage.setItem(THREAD_STORAGE_KEY, JSON.stringify(payload));
+  } catch {
+    // Quota or disabled — soft-fail; the feature is still usable in-memory.
+  }
+}
+
 /** Plain-text excerpt of an answer to ship to the backend on the next
  *  turn. Strips Markdown citation markers + asterisk bolding and caps at
  *  1200 chars so the Normalizer gets a gist, not a wall. Keeps the first
@@ -52,6 +102,10 @@ export function ChatMode() {
   const currentQueryRef = useRef<string>("");
   const savedFinalRef = useRef<FinalResponse | null>(null);
   const threadEndRef = useRef<HTMLDivElement | null>(null);
+  // Block the persistence effect from firing on mount before the
+  // localStorage load completes — otherwise the initial empty `[]`
+  // would write through and clear the saved thread.
+  const hydratedRef = useRef(false);
 
   const openPdf = useCallback(
     (docId: string, page: number) => setPdf({ docId, page }),
@@ -91,16 +145,32 @@ export function ChatMode() {
     threadEndRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [thread.length]);
 
+  // Persist thread to localStorage whenever it changes. Skip the first
+  // render — the mount-time load effect runs after this one and would
+  // see an empty localStorage if we wrote through on the initial `[]`.
+  useEffect(() => {
+    if (!hydratedRef.current) return;
+    savePersistedThread(thread);
+  }, [thread]);
+
   const resetConversation = useCallback(() => {
     setThread([]);
     stream.reset();
     currentQueryRef.current = "";
     savedFinalRef.current = null;
+    try {
+      window.localStorage.removeItem(THREAD_STORAGE_KEY);
+    } catch {
+      // soft-fail
+    }
   }, [stream]);
 
   // Pick up a handed-off query from /pencarian's "Coba Mode Agen →"
   // button OR a restored entry from /riwayat. sessionStorage keeps
   // both simple and works across the client-side route transition.
+  // Priority: sessionStorage handoff > localStorage thread restore.
+  // The handoff represents explicit user intent; the localStorage
+  // restore is silent continuity.
   useEffect(() => {
     try {
       const restore = window.sessionStorage.getItem("anamnesa.restore_entry");
@@ -117,9 +187,19 @@ export function ChatMode() {
       if (prefill) {
         window.sessionStorage.removeItem("anamnesa.prefill_query");
         submit(prefill);
+        return;
+      }
+      const persisted = loadPersistedThread();
+      if (persisted && persisted.length > 0) {
+        const last = persisted[persisted.length - 1];
+        currentQueryRef.current = last.query;
+        savedFinalRef.current = last.final;
+        setThread(persisted);
       }
     } catch {
       // soft-fail
+    } finally {
+      hydratedRef.current = true;
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
