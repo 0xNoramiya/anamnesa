@@ -271,14 +271,21 @@ class HaikuNormalizer:
         self._system_prompt = system_prompt if system_prompt is not None else _load_system_prompt()
         self.last_usage: dict[str, Any] | None = None
 
-    async def run(self, state: QueryState) -> NormalizerResult:
+    async def run(
+        self,
+        state: QueryState,
+        *,
+        prior_turn: dict[str, str] | None = None,
+    ) -> NormalizerResult:
         user_query = state.original_query
         started = time.perf_counter()
 
         # Pre-LLM fast-path: unambiguously non-medical queries skip the
         # Haiku round-trip entirely and return a refusal in ~0ms. Only
         # fires when we're confident — see _is_obviously_non_medical.
-        if _is_obviously_non_medical(user_query):
+        # Skip the heuristic when prior_turn is set: "dan kalau anak?"
+        # looks non-medical in isolation but is a valid follow-up.
+        if prior_turn is None and _is_obviously_non_medical(user_query):
             log.info(
                 "normalizer.heuristic_refuse",
                 reason="out_of_medical_scope",
@@ -286,6 +293,8 @@ class HaikuNormalizer:
             )
             self.last_usage = {"input_tokens": 0, "output_tokens": 0, "thinking_tokens": 0}
             return NormalizerRefusal(RefusalReason.OUT_OF_MEDICAL_SCOPE)
+
+        user_message = _build_user_message(user_query, prior_turn)
 
         # Anthropic's Python SDK `messages.create` is synchronous. We run
         # inside an async agent Protocol but do not await — the SDK call
@@ -296,7 +305,7 @@ class HaikuNormalizer:
             model=self.model_id,
             max_tokens=MAX_OUTPUT_TOKENS,
             system=self._system_prompt,
-            messages=[{"role": "user", "content": user_query}],
+            messages=[{"role": "user", "content": user_message}],
         )
 
         self.last_usage = _parse_usage(response, self.model_id)
@@ -324,7 +333,41 @@ class HaikuNormalizer:
             input_length=len(user_query),
             latency_ms=latency_ms,
             action=action,
+            multi_turn=prior_turn is not None,
             tokens_in=self.last_usage["input_tokens"],
             tokens_out=self.last_usage["output_tokens"],
         )
         return parsed
+
+
+def _build_user_message(
+    user_query: str, prior_turn: dict[str, str] | None
+) -> str:
+    """Assemble the user-side message for Haiku.
+
+    Single-turn: just the raw query (unchanged from pre-multi-turn builds).
+    Multi-turn: prior Q/A as context, then the current follow-up, with an
+    explicit instruction to condense the follow-up into a standalone
+    clinical query. Haiku is smart enough to carry "anak" / "dewasa" /
+    "rawat jalan" hints from the prior answer into the structured query.
+    """
+    if prior_turn is None:
+        return user_query
+    prior_q = prior_turn.get("query", "").strip()
+    prior_a = prior_turn.get("answer", "").strip()
+    if not prior_q or not prior_a:
+        return user_query
+    return (
+        "Ini adalah pertanyaan lanjutan dalam percakapan klinis. Gunakan "
+        "konteks pertanyaan + jawaban sebelumnya untuk memahami maksud "
+        "pertanyaan lanjutan, lalu hasilkan `structured_query` sebagai "
+        "kueri klinis yang BERDIRI SENDIRI (standalone) — sertakan topik, "
+        "populasi pasien, dan konteks dari jawaban sebelumnya jika "
+        "pertanyaan lanjutannya singkat atau elipsis.\n\n"
+        "[Pertanyaan sebelumnya]\n"
+        f"{prior_q}\n\n"
+        "[Ringkasan jawaban sebelumnya]\n"
+        f"{prior_a}\n\n"
+        "[Pertanyaan lanjutan pengguna]\n"
+        f"{user_query}"
+    )

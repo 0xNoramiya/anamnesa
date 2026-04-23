@@ -191,7 +191,7 @@ async def test_cache_hit_skips_the_normalizer(tmp_path: Path) -> None:
     class ExplodingNormalizer:
         calls = 0
 
-        async def run(self, state):  # type: ignore[no-untyped-def]
+        async def run(self, state, *, prior_turn=None):  # type: ignore[no-untyped-def]
             ExplodingNormalizer.calls += 1
             raise AssertionError("Normalizer must not be called on cache hit")
 

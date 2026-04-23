@@ -72,12 +72,17 @@ class Orchestrator:
         user_query: str,
         *,
         state: QueryState | None = None,
+        prior_turn: dict[str, str] | None = None,
     ) -> QueryState:
         """Drive a single query through the agent loop.
 
         `state` may be pre-constructed by a caller that needs a live handle
         to the state (e.g. the SSE server watching `state.trace_events`
         for stream events). If omitted, a fresh state is built here.
+
+        `prior_turn` (keys: "query", "answer") enables multi-turn chat —
+        the Normalizer sees the last Q/A and can condense a terse
+        follow-up like "dan kalau anak?" into a standalone query.
         """
         if state is None:
             state = QueryState(original_query=user_query)
@@ -85,16 +90,26 @@ class Orchestrator:
         started = time.monotonic()
 
         state.append_trace(
-            trace("orchestrator", "query_started", payload={"query_id": state.query_id})
+            trace(
+                "orchestrator",
+                "query_started",
+                payload={
+                    "query_id": state.query_id,
+                    "has_prior_turn": prior_turn is not None,
+                },
+            )
         )
 
         try:
             # Fast path: answer cache keyed on the raw user query. Lives
             # BEFORE normalize so a hit skips every LLM call — Haiku too.
-            if self._try_serve_from_cache(state, started):
+            # Multi-turn queries skip the cache entirely — a follow-up
+            # like "dan kalau anak?" means something completely different
+            # depending on the preceding answer.
+            if prior_turn is None and self._try_serve_from_cache(state, started):
                 return state
 
-            await self._normalize(state)
+            await self._normalize(state, prior_turn=prior_turn)
             if state.refusal_reason is not None:
                 return self._finalize_refusal(state, budget, started)
 
@@ -117,9 +132,14 @@ class Orchestrator:
 
     # ------------------------------------------------------------------ stages
 
-    async def _normalize(self, state: QueryState) -> None:
+    async def _normalize(
+        self,
+        state: QueryState,
+        *,
+        prior_turn: dict[str, str] | None = None,
+    ) -> None:
         t0 = time.monotonic()
-        result = await self.normalizer.run(state)
+        result = await self.normalizer.run(state, prior_turn=prior_turn)
         latency_ms = int((time.monotonic() - t0) * 1000)
         self._charge_agent_usage(state, "normalizer", self.normalizer)
 

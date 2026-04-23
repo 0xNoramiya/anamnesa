@@ -167,6 +167,11 @@ app.add_middleware(
 
 class QueryRequest(BaseModel):
     query: str
+    # Optional prior-turn context for multi-turn chat. When present, the
+    # Normalizer sees the last Q/A and can condense a terse follow-up
+    # ("dan kalau anak?") into a standalone query before retrieval.
+    prior_query: str | None = None
+    prior_answer: str | None = None
 
 
 class QueryCreated(BaseModel):
@@ -651,10 +656,19 @@ async def create_query(req: QueryRequest) -> QueryCreated:
     queue: asyncio.Queue[dict[str, Any] | None] = asyncio.Queue()
     app.state.running_queries[query_id] = queue
 
+    prior_turn: dict[str, str] | None = None
+    if req.prior_query and req.prior_answer:
+        # Trim the excerpt — full answers can be 3-5k chars which is wasteful
+        # when the Normalizer only needs a gist to condense the follow-up.
+        prior_turn = {
+            "query": req.prior_query.strip()[:500],
+            "answer": req.prior_answer.strip()[:1200],
+        }
+
     # Kick off the orchestrator in the background; it publishes each
     # trace event + the final response through the queue. Task reference
     # stashed on app.state so it isn't GC'd before completion.
-    task = asyncio.create_task(_run_query(query_id, text, queue))
+    task = asyncio.create_task(_run_query(query_id, text, queue, prior_turn))
     app.state.tasks.add(task)
     task.add_done_callback(app.state.tasks.discard)
 
@@ -665,6 +679,7 @@ async def _run_query(
     query_id: str,
     text: str,
     queue: asyncio.Queue[dict[str, Any] | None],
+    prior_turn: dict[str, str] | None = None,
 ) -> None:
     orchestrator: Orchestrator = app.state.orchestrator
 
@@ -699,7 +714,7 @@ async def _run_query(
         state = QueryState(original_query=text, query_id=query_id)
         state_box["state"] = state
         try:
-            await orchestrator.run(text, state=state)
+            await orchestrator.run(text, state=state, prior_turn=prior_turn)
         except Exception as exc:
             # Catch-all by design: anything from model transport, retrieval
             # backend, validation, etc. should become a stream error event

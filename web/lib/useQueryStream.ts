@@ -23,13 +23,20 @@ function apiUrl(path: string): string {
   return API_BASE ? `${API_BASE.replace(/\/$/, "")}${path}` : path;
 }
 
+/** Prior turn passed on a follow-up query so the Normalizer can
+ *  condense a terse reply ("dan kalau anak?") into a standalone query. */
+export interface PriorTurn {
+  query: string;
+  answer: string;
+}
+
 interface UseQueryStreamState {
   status: StreamStatus;
   queryId: string | null;
   events: TraceEvent[];
   final: FinalResponse | null;
   error: string | null;
-  submit: (query: string) => Promise<void>;
+  submit: (query: string, priorTurn?: PriorTurn | null) => Promise<void>;
   reset: () => void;
   /** Restore a previous answer from client-side history without re-running. */
   loadFromHistory: (final: FinalResponse) => void;
@@ -62,17 +69,24 @@ export function useQueryStream(): UseQueryStreamState {
     setError(null);
   }, []);
 
-  const submit = useCallback(async (query: string) => {
+  const submit = useCallback(async (query: string, priorTurn?: PriorTurn | null) => {
     reset();
     setStatus("submitting");
     const ac = new AbortController();
     abortRef.current = ac;
 
     try {
+      const body: { query: string; prior_query?: string; prior_answer?: string } = {
+        query,
+      };
+      if (priorTurn && priorTurn.query && priorTurn.answer) {
+        body.prior_query = priorTurn.query;
+        body.prior_answer = priorTurn.answer;
+      }
       const createRes = await fetch(apiUrl("/api/query"), {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ query }),
+        body: JSON.stringify(body),
         signal: ac.signal,
       });
       if (!createRes.ok) {

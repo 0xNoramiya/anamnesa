@@ -6,6 +6,8 @@ import type { StreamStatus } from "@/lib/useQueryStream";
 interface Props {
   onSubmit: (query: string) => void;
   status: StreamStatus;
+  /** Follow-up mode: different label + placeholder, examples hidden. */
+  followUp?: boolean;
 }
 
 const EXAMPLES = [
@@ -16,10 +18,15 @@ const EXAMPLES = [
 
 const INPUT_TAGS = new Set(["INPUT", "TEXTAREA", "SELECT"]);
 
-export function QueryInput({ onSubmit, status }: Props) {
+export function QueryInput({ onSubmit, status, followUp = false }: Props) {
   const [value, setValue] = useState("");
   const busy = status === "submitting" || status === "streaming";
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+
+  const label = followUp ? "Pertanyaan lanjutan" : "Pertanyaan Klinis";
+  const placeholder = followUp
+    ? "Ajukan pertanyaan lanjutan — Anamnesa ingat percakapan ini. Contoh: “dan kalau pasien anak?”, “berapa dosisnya?”, “alternatifnya apa?”"
+    : "Tulis pertanyaan klinis dalam Bahasa Indonesia. Anamnesa mengutip pedoman Indonesia (Pasal 42 UU 28/2014 — domain publik).";
 
   // Global shortcut: `/` focuses the query input (skipped while typing
   // elsewhere). Mirrors GitHub / Linear / Notion and costs nothing for
@@ -60,7 +67,7 @@ export function QueryInput({ onSubmit, status }: Props) {
     <div>
       <form onSubmit={handleSubmit}>
         <label htmlFor="query" className="chapter-mark block mb-2">
-          Pertanyaan Klinis
+          {label}
         </label>
         <div className="bg-white border border-paper-edge rounded-lg shadow-card focus-within:shadow-card-hover transition-shadow">
           <textarea
@@ -71,7 +78,7 @@ export function QueryInput({ onSubmit, status }: Props) {
             onKeyDown={handleKeyDown}
             disabled={busy}
             rows={3}
-            placeholder="Tulis pertanyaan klinis dalam Bahasa Indonesia. Anamnesa mengutip pedoman Indonesia (Pasal 42 UU 28/2014 — domain publik)."
+            placeholder={placeholder}
             className="w-full resize-none bg-transparent border-0 focus:outline-none
                        px-4 py-3 text-body-lg leading-relaxed text-ink
                        placeholder:text-ink-ghost"
@@ -100,7 +107,7 @@ export function QueryInput({ onSubmit, status }: Props) {
         </div>
       </form>
 
-      {!busy && status !== "done" && (
+      {!busy && status !== "done" && !followUp && (
         <div className="mt-6">
           <div className="chapter-mark mb-2">Contoh skenario</div>
           <ul className="space-y-1.5">

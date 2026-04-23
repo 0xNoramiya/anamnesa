@@ -13,20 +13,45 @@ import type { FinalResponse, TraceEvent } from "@/lib/types";
 
 interface PdfOpen { docId: string; page: number }
 
+interface Turn { query: string; final: FinalResponse }
+
+/** Plain-text excerpt of an answer to ship to the backend on the next
+ *  turn. Strips Markdown citation markers + asterisk bolding and caps at
+ *  1200 chars so the Normalizer gets a gist, not a wall. Keeps the first
+ *  two paragraphs because the Drafter is taught to front-load the
+ *  direct recommendation. */
+function answerExcerpt(md: string): string {
+  if (!md) return "";
+  const stripped = md
+    .replace(/\[\[[^\]]+\]\]/g, "")
+    .replace(/\*\*/g, "")
+    .replace(/^#{1,6}\s+/gm, "");
+  const paras = stripped.split(/\n{2,}/).filter((p) => p.trim().length > 0);
+  const head = paras.slice(0, 2).join("\n\n");
+  return head.slice(0, 1200).trim();
+}
+
 /**
- * Chat / Mode Agen — the existing agentic surface, lifted out of the
- * original root page.tsx and nested into the new sidebar shell at
- * /chat. Keeps all previously-shipped behavior (history, cache,
- * cite hover, PDF modal, thinking indicator) so behavior doesn't
- * regress during the redesign.
+ * Chat / Mode Agen — threaded multi-turn surface.
+ *
+ * Queries accumulate as a conversation. Each new submit passes the most
+ * recent (query, answer excerpt) to the backend; the Normalizer reads
+ * both and condenses a terse follow-up like "dan kalau anak?" into a
+ * standalone clinical query before retrieval.
+ *
+ * The in-flight turn renders via the streaming surfaces; completed turns
+ * render in the thread above. A "Percakapan baru" button clears the
+ * thread for a fresh start.
  */
 export function ChatMode() {
   const stream = useQueryStream();
   const history = useHistory();
   const [pdf, setPdf] = useState<PdfOpen | null>(null);
+  const [thread, setThread] = useState<Turn[]>([]);
 
   const currentQueryRef = useRef<string>("");
   const savedFinalRef = useRef<FinalResponse | null>(null);
+  const threadEndRef = useRef<HTMLDivElement | null>(null);
 
   const openPdf = useCallback(
     (docId: string, page: number) => setPdf({ docId, page }),
@@ -38,20 +63,40 @@ export function ChatMode() {
     (q: string) => {
       currentQueryRef.current = q;
       savedFinalRef.current = null;
-      stream.submit(q);
+      const last = thread[thread.length - 1];
+      const priorTurn = last
+        ? { query: last.query, answer: answerExcerpt(last.final.answer_markdown) }
+        : null;
+      stream.submit(q, priorTurn);
     },
-    [stream],
+    [stream, thread],
   );
 
+  // When a `final` lands, move it into the thread and reset the stream
+  // so the input box is ready for the next follow-up.
   useEffect(() => {
     const fin = stream.final;
     if (!fin) return;
     if (savedFinalRef.current === fin) return;
     savedFinalRef.current = fin;
-    if (currentQueryRef.current) {
-      history.addEntry(currentQueryRef.current, fin);
+    const q = currentQueryRef.current;
+    if (q) {
+      history.addEntry(q, fin);
+      setThread((prev) => [...prev, { query: q, final: fin }]);
     }
   }, [stream.final, history]);
+
+  // Auto-scroll to the latest turn when the thread grows.
+  useEffect(() => {
+    threadEndRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, [thread.length]);
+
+  const resetConversation = useCallback(() => {
+    setThread([]);
+    stream.reset();
+    currentQueryRef.current = "";
+    savedFinalRef.current = null;
+  }, [stream]);
 
   // Pick up a handed-off query from /pencarian's "Coba Mode Agen →"
   // button OR a restored entry from /riwayat. sessionStorage keeps
@@ -64,6 +109,7 @@ export function ChatMode() {
         const entry = JSON.parse(restore) as { query: string; final: FinalResponse };
         currentQueryRef.current = entry.query;
         savedFinalRef.current = entry.final;
+        setThread([{ query: entry.query, final: entry.final }]);
         stream.loadFromHistory(entry.final);
         return;
       }
@@ -78,11 +124,107 @@ export function ChatMode() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const inFlight = stream.status === "submitting" || stream.status === "streaming";
+  const hasThread = thread.length > 0;
+  const isFollowUp = hasThread && !inFlight && !stream.final;
+  // Guard against rendering the same final twice (once from stream.final,
+  // once from the thread entry it was just moved into).
+  const streamFinalAlreadyInThread =
+    stream.final !== null &&
+    thread.length > 0 &&
+    thread[thread.length - 1].final === stream.final;
+
   return (
     <div className="mx-auto max-w-[1440px] px-4 md:px-6 lg:px-10 py-4 md:py-8">
       <div className="grid grid-cols-12 gap-4 md:gap-6 pb-10">
         <section className="col-span-12 lg:col-span-8 min-w-0">
-          <QueryInput onSubmit={submit} status={stream.status} />
+          {/* Thread header — only visible once a conversation is underway. */}
+          {hasThread && (
+            <div
+              className="mb-6 flex items-center justify-between gap-3"
+              style={{
+                paddingBottom: 12,
+                borderBottom: "1px solid var(--rule)",
+              }}
+            >
+              <div
+                className="mono"
+                style={{
+                  fontSize: 11,
+                  color: "var(--ink-3)",
+                  letterSpacing: "0.12em",
+                  textTransform: "uppercase",
+                }}
+              >
+                Percakapan · {thread.length}{" "}
+                {thread.length === 1 ? "giliran" : "giliran"}
+              </div>
+              <button
+                type="button"
+                onClick={resetConversation}
+                disabled={inFlight}
+                className="mono"
+                style={{
+                  fontSize: 11,
+                  color: "var(--ink-3)",
+                  letterSpacing: "0.08em",
+                  textTransform: "uppercase",
+                  border: "1px solid var(--rule)",
+                  background: "var(--paper)",
+                  padding: "5px 10px",
+                  borderRadius: 2,
+                  cursor: inFlight ? "not-allowed" : "pointer",
+                  opacity: inFlight ? 0.5 : 1,
+                }}
+                title="Mulai percakapan baru"
+              >
+                + Percakapan baru
+              </button>
+            </div>
+          )}
+
+          {/* Render completed thread turns. */}
+          {thread.map((turn, i) => (
+            <article key={i} className={i === 0 ? "" : "mt-12"}>
+              <TurnQueryLine text={turn.query} index={i} />
+              <div className="mt-4">
+                <AnswerPanel
+                  final={turn.final}
+                  queryText={turn.query}
+                  onOpenPdf={openPdf}
+                />
+              </div>
+            </article>
+          ))}
+
+          {/* In-flight user query + streaming surfaces. */}
+          {inFlight && currentQueryRef.current && (
+            <article className={hasThread ? "mt-12" : "mt-6"}>
+              <TurnQueryLine
+                text={currentQueryRef.current}
+                index={thread.length}
+                pending
+              />
+              {!stream.final && (
+                <div className="mt-4">
+                  <ThinkingIndicator events={stream.events} />
+                  <RetrievalPreview events={stream.events} onOpenPdf={openPdf} />
+                  <StreamingAnswer events={stream.events} />
+                </div>
+              )}
+              {stream.final && !streamFinalAlreadyInThread && (
+                <div className="mt-4">
+                  <AnswerPanel
+                    final={stream.final}
+                    queryText={currentQueryRef.current}
+                    onOpenPdf={openPdf}
+                  />
+                </div>
+              )}
+            </article>
+          )}
+
+          <div ref={threadEndRef} />
 
           {stream.status === "error" && stream.error && (
             <div className="mt-8 bg-oxblood/5 border border-oxblood/20 rounded-lg p-4 text-body">
@@ -93,23 +235,15 @@ export function ChatMode() {
             </div>
           )}
 
-          {stream.final && (
-            <div className="mt-10">
-              <AnswerPanel
-                final={stream.final}
-                queryText={currentQueryRef.current}
-                onOpenPdf={openPdf}
-              />
-            </div>
-          )}
-
-          {stream.status === "streaming" && !stream.final && (
-            <>
-              <ThinkingIndicator events={stream.events} />
-              <RetrievalPreview events={stream.events} onOpenPdf={openPdf} />
-              <StreamingAnswer events={stream.events} />
-            </>
-          )}
+          {/* Input stays at the bottom. In follow-up mode the label +
+              placeholder reflect that Anamnesa remembers prior turns. */}
+          <div className={hasThread ? "mt-10" : ""}>
+            <QueryInput
+              onSubmit={submit}
+              status={stream.status}
+              followUp={isFollowUp}
+            />
+          </div>
         </section>
 
         {/* Trace sidebar: desktop shows it inline; mobile hides it
@@ -127,6 +261,67 @@ export function ChatMode() {
         page={pdf?.page ?? 1}
         onClose={closePdf}
       />
+    </div>
+  );
+}
+
+/** Compact "Q{n}" chip + query text — rendered above every turn's answer
+ *  so the conversation reads top-to-bottom like a transcript. */
+function TurnQueryLine({
+  text,
+  index,
+  pending = false,
+}: {
+  text: string;
+  index: number;
+  pending?: boolean;
+}) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "flex-start",
+        gap: 12,
+        padding: "10px 14px",
+        background: "var(--paper-2)",
+        border: "1px solid var(--rule)",
+        borderLeft: "2px solid var(--navy, #1a2550)",
+        borderRadius: 2,
+      }}
+    >
+      <span
+        className="mono"
+        style={{
+          fontSize: 10.5,
+          color: "var(--ink-3)",
+          letterSpacing: "0.12em",
+          textTransform: "uppercase",
+          paddingTop: 2,
+          minWidth: 32,
+        }}
+      >
+        Q{index + 1}
+      </span>
+      <p
+        style={{
+          margin: 0,
+          fontSize: 14.5,
+          lineHeight: 1.55,
+          color: "var(--ink)",
+          flex: 1,
+          fontFamily: "var(--font-body-stack)",
+        }}
+      >
+        {text}
+        {pending && (
+          <span
+            className="mono"
+            style={{ marginLeft: 8, fontSize: 10.5, color: "var(--ink-3)" }}
+          >
+            · memproses…
+          </span>
+        )}
+      </p>
     </div>
   );
 }

@@ -41,7 +41,12 @@ class Normalizer(Protocol):
     One shot. No retries. Orchestrator refuses if output is malformed.
     """
 
-    async def run(self, state: QueryState) -> NormalizerResult: ...
+    async def run(
+        self,
+        state: QueryState,
+        *,
+        prior_turn: dict[str, str] | None = None,
+    ) -> NormalizerResult: ...
 
 
 @runtime_checkable

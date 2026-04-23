@@ -88,8 +88,14 @@ class FakeNormalizer:
         self.result = result
         self.calls = 0
 
-    async def run(self, state: QueryState) -> NormalizerResult:
+    async def run(
+        self,
+        state: QueryState,
+        *,
+        prior_turn: dict[str, str] | None = None,
+    ) -> NormalizerResult:
         self.calls += 1
+        self.last_prior_turn = prior_turn
         return self.result
 
 
