@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { QueryInput } from "@/components/QueryInput";
 import { AnswerPanel } from "@/components/AnswerPanel";
-import { HistoryPanel } from "@/components/HistoryPanel";
 import { TraceSidebar } from "@/components/TraceSidebar";
 import { PdfViewer } from "@/components/PdfViewer";
 import { RetrievalPreview } from "@/components/app/RetrievalPreview";
@@ -79,29 +78,11 @@ export function ChatMode() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const loadHistoryEntry = useCallback(
-    (entry: { query: string; final: FinalResponse }) => {
-      currentQueryRef.current = entry.query;
-      savedFinalRef.current = entry.final;
-      stream.loadFromHistory(entry.final);
-    },
-    [stream],
-  );
-
   return (
     <div className="mx-auto max-w-[1440px] px-4 md:px-6 lg:px-10 py-4 md:py-8">
       <div className="grid grid-cols-12 gap-4 md:gap-6 pb-10">
         <section className="col-span-12 lg:col-span-8 min-w-0">
           <QueryInput onSubmit={submit} status={stream.status} />
-
-          {history.entries.length > 0 && (
-            <HistoryPanel
-              entries={history.entries}
-              onPick={loadHistoryEntry}
-              onClear={history.clearAll}
-              onRemove={history.removeEntry}
-            />
-          )}
 
           {stream.status === "error" && stream.error && (
             <div className="mt-8 bg-oxblood/5 border border-oxblood/20 rounded-lg p-4 text-body">
