@@ -148,6 +148,9 @@ const ID: Dict = {
   "preview.hits": "potongan",
   "preview.docs": "dokumen",
   "preview.open_pdf": "Buka PDF",
+
+  "streaming.eyebrow": "Drafter sedang menulis",
+  "streaming.chars": "karakter",
 };
 
 const EN: Dict = {
@@ -272,6 +275,9 @@ const EN: Dict = {
   "preview.hits": "hits",
   "preview.docs": "documents",
   "preview.open_pdf": "Open PDF",
+
+  "streaming.eyebrow": "Drafter is writing",
+  "streaming.chars": "chars",
 };
 
 const DICTS: Record<Lang, Dict> = { id: ID, en: EN };

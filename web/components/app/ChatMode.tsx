@@ -7,6 +7,7 @@ import { HistoryPanel } from "@/components/HistoryPanel";
 import { TraceSidebar } from "@/components/TraceSidebar";
 import { PdfViewer } from "@/components/PdfViewer";
 import { RetrievalPreview } from "@/components/app/RetrievalPreview";
+import { StreamingAnswer } from "@/components/app/StreamingAnswer";
 import { useQueryStream } from "@/lib/useQueryStream";
 import { useHistory } from "@/lib/useHistory";
 import type { FinalResponse, TraceEvent } from "@/lib/types";
@@ -125,6 +126,7 @@ export function ChatMode() {
             <>
               <ThinkingIndicator events={stream.events} />
               <RetrievalPreview events={stream.events} onOpenPdf={openPdf} />
+              <StreamingAnswer events={stream.events} />
             </>
           )}
         </section>

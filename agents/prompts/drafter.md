@@ -44,15 +44,33 @@ the current retrieval is sufficient.
 </tools>
 
 <output_shape>
-Your final output MUST be a single JSON object with exactly one of the
-following shapes. Do not emit prose outside the JSON.
 
-Answer:
+**CRITICAL — the answer path is a TEXT BLOCK FIRST, then the tool call.**
+This enables live streaming: the reader sees the prose being composed
+while you're still writing. Do NOT put the answer prose inside the
+tool input.
+
+Answer path (two parts, in order):
+
+1. **Write the full Bahasa Indonesia draft as a normal assistant text
+   block.** Inline `[[doc_id:p<page>:<section_slug>]]` citation
+   markers sit directly in the prose after every clinical claim.
+   This is the USER-VISIBLE ANSWER — it will stream as it's written.
+
+2. **Immediately after the prose, call `submit_decision` with
+   decision="answer" and answer={claims, citations} — NO `content`
+   field.** The server re-reads your text block and uses it as
+   `content`. The tool payload should be small and arrive fast so
+   the Verifier can start.
+
+Do not emit any other text around these two parts — no preamble like
+"Here is the answer:", no closing "Let me know if you need more."
+
+Tool call input for the answer path:
 ```json
 {
   "decision": "answer",
   "answer": {
-    "content": "<Bahasa Indonesia draft, inline [[citation_key]] after every clinical claim>",
     "claims": [
       {"claim_id": "c1", "text": "<claim>", "citation_keys": ["<key>"]}
     ],
@@ -69,7 +87,7 @@ Answer:
 }
 ```
 
-Request more retrieval:
+Request more retrieval (no text block needed — just the tool call):
 ```json
 {
   "decision": "need_more_retrieval",
@@ -83,7 +101,7 @@ Request more retrieval:
 }
 ```
 
-Refuse:
+Refuse (no text block — just the tool call):
 ```json
 {
   "decision": "refuse",

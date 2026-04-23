@@ -40,20 +40,31 @@ class Config:
     drafter_effort: str
     verifier_model: str
     verifier_effort: str
+    drafter_thinking_budget: int = 8000
+    verifier_thinking_budget: int = 12000
 
 
 CONFIGS = [
     Config(
-        label="shipped (Opus high / Haiku 4.5)",
+        label="shipped (Opus medium / Haiku)",
         drafter_model="claude-opus-4-7",
-        drafter_effort="high",
+        drafter_effort="medium",
         verifier_model="claude-haiku-4-5-20251001",
         verifier_effort="high",
     ),
     Config(
-        label="aggressive (Opus medium / Haiku 4.5)",
+        label="opus-no-think (Opus no-thinking / Haiku)",
         drafter_model="claude-opus-4-7",
         drafter_effort="medium",
+        drafter_thinking_budget=0,
+        verifier_model="claude-haiku-4-5-20251001",
+        verifier_effort="high",
+    ),
+    Config(
+        label="haiku-drafter (Haiku / Haiku)",
+        drafter_model="claude-haiku-4-5-20251001",
+        drafter_effort="medium",
+        drafter_thinking_budget=0,
         verifier_model="claude-haiku-4-5-20251001",
         verifier_effort="high",
     ),
@@ -75,15 +86,24 @@ async def run_one(cfg: Config) -> dict:
             api_key=api_key,
             retriever=retriever,
             effort=cfg.drafter_effort,
+            # Haiku or `opus-no-think` configs pass budget=0 to skip
+            # the `thinking` kwarg (Haiku doesn't support adaptive
+            # thinking; Opus at 0 still streams but without hidden
+            # extended thinking phase).
+            thinking_budget=(
+                0 if "haiku" in cfg.drafter_model
+                else cfg.drafter_thinking_budget
+            ),
         ),
         verifier=OpusVerifier(
             model_id=cfg.verifier_model,
             api_key=api_key,
             retriever=retriever,
             effort=cfg.verifier_effort,
-            # Haiku 4.5 doesn't support adaptive thinking; pass budget=0
-            # to skip the `thinking` kwarg. Opus keeps the default.
-            thinking_budget=0 if "haiku" in cfg.verifier_model else 12000,
+            thinking_budget=(
+                0 if "haiku" in cfg.verifier_model
+                else cfg.verifier_thinking_budget
+            ),
         ),
         limits=BudgetLimits.from_env(),
     )

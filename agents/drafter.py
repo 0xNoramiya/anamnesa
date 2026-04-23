@@ -37,6 +37,7 @@ Transport errors propagate per the "Errors loud, not swallowed" rule.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import time
 from pathlib import Path
@@ -66,8 +67,12 @@ log = structlog.get_logger("anamnesa.agents.drafter")
 
 DEFAULT_MODEL_ID = "claude-opus-4-7"
 MAX_OUTPUT_TOKENS = 16_000  # includes adaptive-thinking tokens on Opus 4.7
-DEFAULT_THINKING_BUDGET = 8000
-DEFAULT_EFFORT = "xhigh"  # one of: low, medium, high, xhigh
+# Drafter now defaults to thinking_budget=0 because adaptive thinking
+# batches all output through the tool call → no text streaming, which
+# defeats the live-answer UX. Rollback to 8000 is a single-arg change
+# if future benchmarks show quality drift.
+DEFAULT_THINKING_BUDGET = 0
+DEFAULT_EFFORT = "xhigh"  # unused when thinking_budget=0; kept for callers
 MAX_LOOP_ITERATIONS = 8
 PROMPT_PATH = Path(__file__).parent / "prompts" / "drafter.md"
 
@@ -181,12 +186,20 @@ _CLAIM_SCHEMA: dict[str, Any] = {
 
 _ANSWER_SCHEMA: dict[str, Any] = {
     "type": "object",
+    "description": (
+        "Metadata for the answer you already wrote as a text block before "
+        "this tool call. Do NOT include `content` — the server reads the "
+        "prose from the streamed text block."
+    ),
     "properties": {
+        # `content` kept as an optional legacy field so older prompts /
+        # rolling deployments still work; when provided, we prefer it
+        # over the text-block buffer. See OpusDrafter.run().
         "content": {"type": "string"},
         "claims": {"type": "array", "items": _CLAIM_SCHEMA},
         "citations": {"type": "array", "items": _CITATION_SCHEMA},
     },
-    "required": ["content", "claims", "citations"],
+    "required": ["claims", "citations"],
 }
 
 
@@ -390,8 +403,17 @@ def _parse_filter_hints(raw: Any) -> RetrievalFilters:
         return RetrievalFilters()
 
 
-def _parse_submit_input(tool_input: dict[str, Any]) -> DrafterResult | None:
+def _parse_submit_input(
+    tool_input: dict[str, Any],
+    streamed_text: str = "",
+) -> DrafterResult | None:
     """Parse a `submit_decision` tool input into a DrafterResult.
+
+    `streamed_text` is the accumulated text block the Drafter emitted
+    BEFORE the tool call — used as `content` when the tool input
+    doesn't include one (the new prompt contract). Legacy payloads
+    that do include `content` inside the tool win, so rolling updates
+    work either way.
 
     Returns None if the input is malformed — caller will refuse with
     CITATIONS_UNVERIFIABLE.
@@ -401,11 +423,18 @@ def _parse_submit_input(tool_input: dict[str, Any]) -> DrafterResult | None:
         answer_payload = tool_input.get("answer")
         if not isinstance(answer_payload, dict):
             return None
+        # Prefer the explicit content field if the model still sends it
+        # (older prompts / rollback safety). Fall back to the text block
+        # the Drafter streamed before calling the tool.
+        content = str(answer_payload.get("content") or streamed_text or "").strip()
+        if not content:
+            # No prose anywhere — can't verify a blank answer.
+            return None
         try:
             claims = [Claim(**c) for c in answer_payload.get("claims", [])]
             citations = [Citation(**c) for c in answer_payload.get("citations", [])]
             answer = DraftAnswer(
-                content=str(answer_payload.get("content", "")),
+                content=content,
                 claims=claims,
                 citations=citations,
             )
@@ -557,11 +586,17 @@ class OpusDrafter:
                 )
             )
 
-            # Pass a shallow copy so captures/logs/tests see the messages
-            # list at the moment of the call, not after later mutations.
-            response = self._client.messages.create(
+            # Stream the response so text_delta events land as trace
+            # events in real time. The new prompt contract asks the
+            # Drafter to emit the full Bahasa answer as a text block
+            # BEFORE calling submit_decision, which lets the SSE pump
+            # forward each token to the UI as it's written — user sees
+            # the answer composed live instead of waiting 60s blank.
+            response, streamed_text = await self._stream_once(
                 messages=list(messages),
-                **kwargs_base,
+                kwargs_base=kwargs_base,
+                state=state,
+                iteration=iterations,
             )
 
             in_tok, out_tok, think_tok = _extract_usage(response)
@@ -602,7 +637,7 @@ class OpusDrafter:
                     tool_input = {}
 
                 if tool_name == "submit_decision":
-                    parsed = _parse_submit_input(tool_input)
+                    parsed = _parse_submit_input(tool_input, streamed_text)
                     if parsed is None:
                         log.warning(
                             "drafter.submit_malformed",
@@ -734,6 +769,85 @@ class OpusDrafter:
             query_id=state.query_id,
         )
         return decision
+
+    # ----------------------------------------------------------- streaming
+
+    async def _stream_once(
+        self,
+        *,
+        messages: list[dict[str, Any]],
+        kwargs_base: dict[str, Any],
+        state: QueryState,
+        iteration: int,
+    ) -> tuple[Any, str]:
+        """Single Anthropic messages.stream() turn.
+
+        Side effect: emits a `drafter.text_delta` trace event for each
+        text chunk as it streams, so the SSE pump forwards tokens to
+        the UI in real time. Also emits a terminal `drafter.text_done`
+        event with the full assembled text so UI layers that cache
+        events can lock in the final content.
+
+        Returns `(final_message, streamed_text)` — final_message has
+        the same shape messages.create returns (usage, stop_reason,
+        content blocks with tool inputs populated), so the existing
+        tool-use dispatch loop downstream doesn't need any changes.
+        """
+        text_buffer: list[str] = []
+
+        # Some fake-client paths in tests don't implement `.stream()`.
+        # Fall back to `.create()` in that case so unit tests keep working.
+        messages_api = self._client.messages
+        stream_method = getattr(messages_api, "stream", None)
+        if stream_method is None:
+            response = messages_api.create(messages=messages, **kwargs_base)
+            return response, ""
+
+        # Anthropic's sync SDK would block the event loop end-to-end —
+        # the SSE pump watching state.trace_events wouldn't get a chance
+        # to forward deltas to the browser until the stream was done.
+        # We push the whole sync stream onto a worker thread. The thread
+        # still mutates state.trace_events directly (append is atomic
+        # under the GIL) so the main loop's poller sees deltas land in
+        # real time.
+        def _run_stream() -> tuple[Any, str]:
+            with stream_method(messages=messages, **kwargs_base) as stream:
+                for event in stream:
+                    etype = getattr(event, "type", None)
+                    if etype != "content_block_delta":
+                        continue
+                    delta = getattr(event, "delta", None)
+                    dtype = getattr(delta, "type", None)
+                    if dtype == "text_delta":
+                        chunk = getattr(delta, "text", "") or ""
+                        if chunk:
+                            text_buffer.append(chunk)
+                            state.append_trace(
+                                trace(
+                                    "drafter",
+                                    "text_delta",
+                                    payload={
+                                        "iteration": iteration,
+                                        "text": chunk,
+                                    },
+                                )
+                            )
+                final_message = stream.get_final_message()
+            return final_message, "".join(text_buffer).strip()
+
+        final_message, streamed_text = await asyncio.to_thread(_run_stream)
+        if streamed_text:
+            state.append_trace(
+                trace(
+                    "drafter",
+                    "text_done",
+                    payload={
+                        "iteration": iteration,
+                        "chars": len(streamed_text),
+                    },
+                )
+            )
+        return final_message, streamed_text
 
     # ----------------------------------------------------------- dispatchers
 

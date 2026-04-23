@@ -331,6 +331,18 @@ html.dark {
   .no-scrollbar { scrollbar-width: none; }
 }
 
+/* Streaming answer cursor — pulses while the Drafter is still writing. */
+.stream-cursor {
+  display: inline-block;
+  margin-left: 2px;
+  animation: streamCursor 0.9s steps(1) infinite;
+  color: var(--teal);
+  font-weight: 400;
+}
+@keyframes streamCursor {
+  50% { opacity: 0; }
+}
+
 /* Landing page — mobile overrides. Grid helpers collapse to one column
    on narrow screens so the CTA band stacks cleanly. */
 @media (max-width: 720px) {
