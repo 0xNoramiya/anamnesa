@@ -568,87 +568,196 @@ def _render_guideline_markdown(rec, chunks: list[dict[str, Any]]) -> str:
     return "\n".join(lines)
 
 
+_GUIDELINE_HTML_CSS = """
+:root {
+  --paper: #F7F3EC; --paper-2: #EFE8D9; --ink: #0F1B2D; --ink-2: #2A3B57;
+  --ink-3: #556784; --navy: #1E2F4D; --oxblood: #8B1E2D; --rule: #D9CFB8;
+  --mono: ui-monospace, "SF Mono", Menlo, monospace;
+}
+* { box-sizing: border-box; }
+html, body {
+  margin: 0;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+}
+body {
+  padding: 24px 18px 80px;
+  max-width: 780px;
+  margin: 0 auto;
+  line-height: 1.65;
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+}
+header { border-bottom: 1px solid var(--rule); padding-bottom: 16px; margin-bottom: 24px; }
+h1 { font-size: 26px; margin: 0 0 8px; letter-spacing: -0.01em; line-height: 1.2; }
+.meta {
+  color: var(--ink-3); font-family: var(--mono); font-size: 12.5px;
+  display: flex; flex-wrap: wrap; gap: 8px;
+}
+.meta-sep { opacity: 0.4; }
+.legal {
+  margin-top: 14px; padding: 10px 14px; border-left: 2px solid var(--oxblood);
+  background: var(--paper-2); font-size: 13px; color: var(--ink-2);
+}
+.backlink {
+  display: inline-block; margin-bottom: 14px; font-family: var(--mono);
+  font-size: 12px; color: var(--navy); text-decoration: none; letter-spacing: 0.04em;
+}
+.backlink:hover { text-decoration: underline; }
+.toc {
+  margin: 18px 0 0; padding: 12px 14px; background: var(--paper-2);
+  border: 1px solid var(--rule); border-radius: 2px;
+}
+.toc-label {
+  font-family: var(--mono); font-size: 10.5px; color: var(--ink-3);
+  letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 6px;
+}
+.toc-links { display: flex; flex-wrap: wrap; gap: 4px 8px; font-family: var(--mono); font-size: 12px; }
+.toc-links a {
+  color: var(--navy); text-decoration: none;
+  padding: 2px 6px; border: 1px solid transparent; border-radius: 2px;
+}
+.toc-links a:hover { border-color: var(--rule); background: var(--paper); }
+.page {
+  margin-top: 28px; padding-top: 14px; border-top: 1px dashed var(--rule);
+  scroll-margin-top: 12px;
+}
+.page-label {
+  font-family: var(--mono); font-size: 11px; color: var(--ink-3);
+  letter-spacing: 0.14em; text-transform: uppercase; margin: 0;
+}
+h2 {
+  margin: 2px 0 14px; font-size: 18px; color: var(--ink);
+  letter-spacing: -0.01em; font-weight: 600;
+}
+h3 {
+  margin: 18px 0 4px; font-size: 14.5px; font-family: var(--mono);
+  color: var(--ink-2); letter-spacing: 0.02em; font-weight: 500;
+}
+.path { color: var(--ink-3); font-family: var(--mono); font-size: 11px; margin: 0 0 8px; word-break: break-all; }
+p { margin: 0 0 14px; white-space: pre-wrap; word-wrap: break-word; overflow-wrap: anywhere; }
+.to-top {
+  position: fixed; bottom: 14px; right: 14px;
+  padding: 8px 12px; background: var(--navy); color: var(--paper);
+  text-decoration: none; font-family: var(--mono); font-size: 12px;
+  border-radius: 2px; box-shadow: 0 2px 8px rgba(0,0,0,0.12);
+  opacity: 0.85;
+}
+.to-top:hover { opacity: 1; }
+footer {
+  margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule);
+  color: var(--ink-3); font-size: 12px; text-align: center;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #0B1220; --paper-2: #121B2E; --ink: #E8E2D4;
+    --ink-2: #B8B0A0; --ink-3: #8A8372; --navy: #8AA5D8; --oxblood: #E0727E;
+    --rule: #26324A;
+  }
+}
+""".strip()
+
+
 def _render_guideline_html(rec, chunks: list[dict[str, Any]]) -> str:
-    """Minimal self-contained HTML. No external fonts (works offline on
-    a Puskesmas connection) — uses system fonts and the civic palette
-    with CSS custom properties so it looks like the rest of Anamnesa."""
+    """Self-contained HTML. No external fonts or scripts — works on a
+    Puskesmas network, on iOS Safari, without the PDF iframe quirks."""
     import html as html_lib
 
     def esc(s: str) -> str:
         return html_lib.escape(s, quote=True)
 
-    parts: list[str] = []
-    parts.append(f"""<!DOCTYPE html>
-<html lang="id">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>{esc(rec.title)} — Anamnesa</title>
-<style>
-  :root {{
-    --paper: #F7F3EC; --paper-2: #EFE8D9; --ink: #0F1B2D; --ink-2: #2A3B57;
-    --ink-3: #556784; --navy: #1E2F4D; --oxblood: #8B1E2D; --rule: #D9CFB8;
-    --mono: ui-monospace, "SF Mono", Menlo, monospace;
-  }}
-  * {{ box-sizing: border-box; }}
-  html, body {{ margin: 0; background: var(--paper); color: var(--ink);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }}
-  body {{ padding: 24px 18px 64px; max-width: 780px; margin: 0 auto;
-    line-height: 1.65; font-size: 16px; -webkit-font-smoothing: antialiased; }}
-  header {{ border-bottom: 1px solid var(--rule); padding-bottom: 16px; margin-bottom: 24px; }}
-  h1 {{ font-size: 26px; margin: 0 0 8px; letter-spacing: -0.01em; line-height: 1.2; }}
-  .meta {{ color: var(--ink-3); font-family: var(--mono); font-size: 12.5px; }}
-  .legal {{ margin-top: 14px; padding: 10px 14px; border-left: 2px solid var(--oxblood);
-    background: var(--paper-2); font-size: 13px; color: var(--ink-2); }}
-  h2 {{ margin-top: 32px; padding-top: 14px; border-top: 1px dashed var(--rule);
-    font-size: 19px; color: var(--navy); font-family: var(--mono); letter-spacing: 0.04em; }}
-  h3 {{ margin-top: 22px; font-size: 15px; font-family: var(--mono);
-    color: var(--ink-2); letter-spacing: 0.02em; }}
-  .path {{ color: var(--ink-3); font-family: var(--mono); font-size: 11.5px; margin: -10px 0 10px; }}
-  p {{ margin: 0 0 14px; white-space: pre-wrap; word-wrap: break-word; }}
-  footer {{ margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule);
-    color: var(--ink-3); font-size: 12px; text-align: center; }}
-  .backlink {{ display: inline-block; margin-bottom: 14px; font-family: var(--mono);
-    font-size: 12px; color: var(--navy); text-decoration: none; letter-spacing: 0.04em; }}
-  .backlink:hover {{ text-decoration: underline; }}
-  @media (prefers-color-scheme: dark) {{
-    :root {{ --paper: #0B1220; --paper-2: #121B2E; --ink: #E8E2D4;
-      --ink-2: #B8B0A0; --ink-3: #8A8372; --navy: #6A8AC4; --oxblood: #E0727E;
-      --rule: #26324A; }}
-  }}
-</style>
-</head>
-<body>
-<a class="backlink" href="/guideline">← Kembali ke pustaka</a>
-<header>
-<h1>{esc(rec.title)}</h1>
-<div class="meta">{esc(rec.doc_id)} · {esc(rec.source_type.replace('_', ' ').upper())} · {rec.year}
-{' · ' + esc(rec.authority) if rec.authority else ''}
-{' · ' + esc(rec.kepmenkes_number) if rec.kepmenkes_number else ''}</div>
-<div class="legal">Diindeks oleh Anamnesa dari arsip Kemenkes RI. Basis hukum: <strong>UU 28/2014 Pasal 42</strong> (public domain). Hanya referensi — bukan alat diagnosis.</div>
-</header>
-""")
-
+    # Group chunks by page so we can render one <section> per page
+    # with an id anchor. 900+ pages is a lot — the TOC at the top
+    # gives the user a jump index.
+    pages: list[tuple[int, list[dict[str, Any]]]] = []
     current_page: int | None = None
     for c in chunks:
         page = int(c.get("page", 0) or 0)
         if page != current_page:
-            parts.append(f'<h2>Halaman {page}</h2>' if page else '<h2>Pendahuluan</h2>')
+            pages.append((page, [c]))
             current_page = page
-        slug = str(c.get("section_slug") or "").strip()
-        path = str(c.get("section_path") or "").strip()
-        if slug:
-            parts.append(f"<h3>{esc(slug)}</h3>")
-            if path and path != slug:
-                parts.append(f'<div class="path">{esc(path)}</div>')
-        text = str(c.get("text") or "").strip()
-        if text:
-            parts.append(f"<p>{esc(text)}</p>")
+        else:
+            pages[-1][1].append(c)
 
+    # Header
+    meta_bits: list[str] = [
+        f"<span>{esc(rec.doc_id)}</span>",
+        f'<span class="meta-sep">·</span>',
+        f"<span>{esc(rec.source_type.replace('_', ' ').upper())}</span>",
+        f'<span class="meta-sep">·</span>',
+        f"<span>{rec.year}</span>",
+    ]
+    if rec.authority:
+        meta_bits += [
+            '<span class="meta-sep">·</span>',
+            f"<span>{esc(rec.authority)}</span>",
+        ]
+    if rec.kepmenkes_number:
+        meta_bits += [
+            '<span class="meta-sep">·</span>',
+            f"<span>{esc(rec.kepmenkes_number)}</span>",
+        ]
+
+    # TOC — chunk the page list into groups of ~20 to keep the
+    # display tidy on phones. Anchor to page ids below.
+    toc_links: list[str] = []
+    for page_num, _ in pages:
+        label = f"hal {page_num}" if page_num else "awal"
+        anchor = f"p{page_num}" if page_num else "p0"
+        toc_links.append(f'<a href="#{anchor}">{label}</a>')
+
+    parts: list[str] = []
+    parts.append("<!DOCTYPE html>\n<html lang=\"id\">\n<head>\n")
+    parts.append('<meta charset="utf-8">\n')
+    parts.append('<meta name="viewport" content="width=device-width, initial-scale=1">\n')
+    parts.append(f"<title>{esc(rec.title)} — Anamnesa</title>\n")
+    parts.append(f"<style>\n{_GUIDELINE_HTML_CSS}\n</style>\n")
+    parts.append("</head>\n<body>\n")
+    parts.append('<a class="backlink" href="/guideline">← Kembali ke pustaka</a>\n')
+    parts.append('<header id="top">\n')
+    parts.append(f"<h1>{esc(rec.title)}</h1>\n")
+    parts.append(f'<div class="meta">{"".join(meta_bits)}</div>\n')
     parts.append(
-        f'<footer>Diekspor dari anamnesa.kudaliar.id pada {datetime.now(UTC).isoformat()}</footer>'
+        '<div class="legal">Diindeks oleh Anamnesa dari arsip Kemenkes RI. '
+        "Basis hukum: <strong>UU 28/2014 Pasal 42</strong> (public domain). "
+        "Hanya referensi — bukan alat diagnosis.</div>\n"
     )
-    parts.append("</body></html>")
+    if toc_links:
+        parts.append('<nav class="toc" aria-label="Daftar halaman">\n')
+        parts.append(f'<div class="toc-label">Lompat ke halaman ({len(pages)})</div>\n')
+        parts.append(f'<div class="toc-links">{"".join(toc_links)}</div>\n')
+        parts.append("</nav>\n")
+    parts.append("</header>\n")
+
+    for page_num, page_chunks in pages:
+        anchor = f"p{page_num}" if page_num else "p0"
+        page_label = f"HALAMAN {page_num}" if page_num else "PENDAHULUAN"
+        parts.append(f'<section class="page" id="{anchor}">\n')
+        parts.append(f'<div class="page-label">{page_label}</div>\n')
+        # First chunk on this page: use its section_slug as the h2.
+        first = page_chunks[0]
+        first_slug = str(first.get("section_slug") or "").strip()
+        if first_slug:
+            parts.append(f"<h2>{esc(first_slug)}</h2>\n")
+        for i, chunk in enumerate(page_chunks):
+            slug = str(chunk.get("section_slug") or "").strip()
+            path = str(chunk.get("section_path") or "").strip()
+            text = str(chunk.get("text") or "").strip()
+            # Use h3 for subsequent section slugs within the same page.
+            if i > 0 and slug:
+                parts.append(f"<h3>{esc(slug)}</h3>\n")
+            if path and path != slug:
+                parts.append(f'<div class="path">{esc(path)}</div>\n')
+            if text:
+                parts.append(f"<p>{esc(text)}</p>\n")
+        parts.append("</section>\n")
+
+    parts.append('<a class="to-top" href="#top">↑ atas</a>\n')
+    parts.append(
+        f'<footer>Diekspor dari anamnesa.kudaliar.id · {datetime.now(UTC).isoformat()}</footer>\n'
+    )
+    parts.append("</body>\n</html>\n")
     return "".join(parts)
 
 
