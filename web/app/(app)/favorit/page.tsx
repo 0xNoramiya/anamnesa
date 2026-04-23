@@ -4,12 +4,14 @@ import { useCallback, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { TopBar } from "@/components/shell/TopBar";
 import { CurrencyChip, type CurrencyKind } from "@/components/shell/CurrencyChip";
-import { useFavorites, type Favorite } from "@/lib/useFavorites";
+import { useFavorites } from "@/lib/useFavorites";
+import { useI18n } from "@/components/shell/LanguageProvider";
 import type { FinalResponse } from "@/lib/types";
 
 export default function FavoritPage() {
   const router = useRouter();
   const fav = useFavorites();
+  const { t } = useI18n();
 
   const openAnswer = useCallback(
     (entry: { query: string; final: FinalResponse }) => {
@@ -29,19 +31,19 @@ export default function FavoritPage() {
   return (
     <>
       <TopBar
-        title="Favorit"
-        subtitle="// pintasan pribadi · jawaban · kutipan · dokumen"
+        title={t("topbar.favorites.title")}
+        subtitle={`// ${t("topbar.favorites.sub")}`}
       >
         {fav.total > 0 && (
           <button
             type="button"
             onClick={() => {
-              if (confirm("Hapus seluruh favorit?")) fav.clearAll();
+              if (confirm(t("page.favorites.clear_all") + "?")) fav.clearAll();
             }}
             className="btn btn-ghost"
             style={{ padding: "6px 10px", fontSize: 12 }}
           >
-            Hapus semua
+            {t("page.favorites.clear_all")}
           </button>
         )}
       </TopBar>
@@ -51,9 +53,9 @@ export default function FavoritPage() {
           <EmptyState />
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: 36 }}>
-            <Section title="Jawaban tersimpan" count={fav.answers.length}>
+            <Section title={t("page.favorites.section_answers")} count={fav.answers.length}>
               {fav.answers.length === 0 ? (
-                <EmptyInline label="Belum ada jawaban yang disimpan." />
+                <EmptyInline label={t("page.favorites.empty_answers")} />
               ) : (
                 <Grid>
                   {fav.answers.map((a) => (
@@ -70,9 +72,9 @@ export default function FavoritPage() {
               )}
             </Section>
 
-            <Section title="Kutipan referensi" count={fav.chunks.length}>
+            <Section title={t("page.favorites.section_chunks")} count={fav.chunks.length}>
               {fav.chunks.length === 0 ? (
-                <EmptyInline label="Simpan kutipan dari kartu referensi di Chat." />
+                <EmptyInline label={t("page.favorites.empty_chunks")} />
               ) : (
                 <Grid>
                   {fav.chunks.map((c) => (
@@ -88,9 +90,9 @@ export default function FavoritPage() {
               )}
             </Section>
 
-            <Section title="Dokumen guideline" count={fav.docs.length}>
+            <Section title={t("page.favorites.section_docs")} count={fav.docs.length}>
               {fav.docs.length === 0 ? (
-                <EmptyInline label="Gunakan bintang pada halaman Guideline untuk menandai dokumen." />
+                <EmptyInline label={t("page.favorites.empty_docs")} />
               ) : (
                 <Grid>
                   {fav.docs.map((d) => (
@@ -174,6 +176,7 @@ function EmptyInline({ label }: { label: string }) {
 }
 
 function EmptyState() {
+  const { t } = useI18n();
   return (
     <div
       style={{
@@ -194,13 +197,13 @@ function EmptyState() {
           marginBottom: 10,
         }}
       >
-        § FAVORIT KOSONG
+        {t("page.favorites.empty_eyebrow")}
       </div>
       <h2
         className="display"
         style={{ fontSize: 24, margin: 0, fontWeight: 500, letterSpacing: "-0.01em" }}
       >
-        Tap bintang ★ di jawaban, kutipan, atau dokumen untuk menyimpannya di sini.
+        {t("page.favorites.empty_title")}
       </h2>
       <p
         style={{
@@ -210,10 +213,8 @@ function EmptyState() {
           margin: "12px auto 0",
           lineHeight: 1.55,
         }}
-      >
-        Disimpan di <code>localStorage</code> peramban Anda. Tidak ada server yang melihat
-        koleksi ini.
-      </p>
+        dangerouslySetInnerHTML={{ __html: t("page.favorites.empty_body_html") }}
+      />
     </div>
   );
 }

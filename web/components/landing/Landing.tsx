@@ -1,15 +1,18 @@
+"use client";
+
 import Link from "next/link";
 import { Wordmark } from "@/components/shell/Logo";
 import { CurrencyChip } from "@/components/shell/CurrencyChip";
+import { useI18n } from "@/components/shell/LanguageProvider";
+import { LANG_LABELS, type Lang } from "@/lib/i18n";
 
 /**
- * Landing page — tighter, professional rewrite:
- * - No fake document chrome (§ section markers), no version footer
- * - Hero H1 truncated, single-sentence subhead
- * - ONE concrete demo, not three
- * - Three feature bullets replace the audience + three-demo blocks
- * - Legal basis + CTA band stay; footer simplified
- * All columns stack on mobile; hero scales down via clamp().
+ * Landing page — five tight blocks:
+ *   Hero → Feature bullets → One demo → Legal basis → CTA band → Footer
+ *
+ * Bahasa / English toggle in the top bar keeps clinical content Bahasa
+ * where it represents the actual corpus (medical terms), and switches
+ * all chrome copy to English when judges select it.
  */
 export function Landing() {
   return (
@@ -26,6 +29,7 @@ export function Landing() {
 }
 
 function LandingHeader() {
+  const { t, lang, setLang } = useI18n();
   return (
     <div
       style={{
@@ -44,18 +48,62 @@ function LandingHeader() {
     >
       <Wordmark size={15} />
       <div style={{ flex: 1 }} />
+      <LangSwitch lang={lang} onChange={setLang} />
       <Link
         href="/chat"
         className="btn btn-primary"
         style={{ padding: "8px 14px", fontSize: 13 }}
       >
-        Buka aplikasi →
+        {t("landing.cta.open")}
       </Link>
     </div>
   );
 }
 
+function LangSwitch({ lang, onChange }: { lang: Lang; onChange: (l: Lang) => void }) {
+  return (
+    <div
+      role="group"
+      aria-label="Language"
+      className="mono"
+      style={{
+        display: "inline-flex",
+        border: "1px solid var(--rule)",
+        borderRadius: 2,
+        overflow: "hidden",
+        fontSize: 10.5,
+        letterSpacing: "0.08em",
+      }}
+    >
+      {(["id", "en"] as Lang[]).map((l) => {
+        const active = lang === l;
+        return (
+          <button
+            key={l}
+            type="button"
+            onClick={() => onChange(l)}
+            aria-pressed={active}
+            title={LANG_LABELS[l]}
+            style={{
+              padding: "5px 9px",
+              background: active ? "var(--navy)" : "transparent",
+              color: active ? "var(--paper)" : "var(--ink-2)",
+              border: "none",
+              cursor: "pointer",
+              fontFamily: "var(--font-mono-stack)",
+              textTransform: "uppercase",
+            }}
+          >
+            {l}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
 function LandingHero() {
+  const { t } = useI18n();
   return (
     <section
       style={{
@@ -77,10 +125,10 @@ function LandingHero() {
           maxWidth: 900,
         }}
       >
-        Pedoman klinis Indonesia,
+        {t("landing.hero.h1.line1")}
         <br />
         <span style={{ fontStyle: "italic", color: "var(--navy)" }}>
-          dengan sitasi halaman.
+          {t("landing.hero.h1.line2")}
         </span>
       </h1>
 
@@ -94,9 +142,7 @@ function LandingHero() {
           fontWeight: 400,
         }}
       >
-        Tanya dalam Bahasa Indonesia. Setiap jawaban mengutip halaman
-        spesifik dari PPK FKTP, PNPK, atau Kepmenkes. Bila korpus tidak
-        memuat jawabannya, kami menolak dengan jujur.
+        {t("landing.hero.sub")}
       </p>
 
       <div
@@ -113,14 +159,14 @@ function LandingHero() {
           className="btn btn-primary"
           style={{ padding: "12px 20px", fontSize: 14 }}
         >
-          Buka aplikasi →
+          {t("landing.cta.open")}
         </Link>
         <a
           href="#contoh"
           className="btn btn-ghost"
           style={{ padding: "12px 20px", fontSize: 14 }}
         >
-          Lihat contoh
+          {t("landing.cta.example")}
         </a>
       </div>
 
@@ -134,28 +180,18 @@ function LandingHero() {
           lineHeight: 1.6,
           maxWidth: 540,
         }}
-      >
-        <strong style={{ color: "var(--ink)" }}>80 dokumen</strong> dari arsip
-        Kemenkes RI. Gratis, tanpa pendaftaran.
-      </p>
+        dangerouslySetInnerHTML={{ __html: t("landing.hero.stat") }}
+      />
     </section>
   );
 }
 
 function LandingFeatures() {
+  const { t } = useI18n();
   const items = [
-    {
-      title: "Setiap klaim dikutip",
-      body: "Tidak ada paragraf tanpa sumber. Tap angka [N] untuk melompat ke kartu referensi, klik untuk membuka PDF di halaman tepat.",
-    },
-    {
-      title: "Bendera masa berlaku",
-      body: "Pedoman yang sudah berusia lebih dari lima tahun ditandai otomatis. Dokumen yang sudah diganti menampilkan versi terbaru.",
-    },
-    {
-      title: "Penolakan, bukan halusinasi",
-      body: "Bila korpus tidak memuat jawaban, Anamnesa menolak menjawab dan menampilkan dokumen paling dekat yang sempat ditemukan.",
-    },
+    { title: t("landing.features.cited.title"), body: t("landing.features.cited.body") },
+    { title: t("landing.features.flags.title"), body: t("landing.features.flags.body") },
+    { title: t("landing.features.refuse.title"), body: t("landing.features.refuse.body") },
   ];
 
   return (
@@ -213,6 +249,7 @@ function LandingFeatures() {
 }
 
 function LandingDemo() {
+  const { t } = useI18n();
   return (
     <section
       id="contoh"
@@ -233,7 +270,7 @@ function LandingDemo() {
             marginBottom: 10,
           }}
         >
-          CONTOH
+          {t("landing.demo.eyebrow")}
         </div>
         <h2
           className="display"
@@ -246,7 +283,7 @@ function LandingDemo() {
             color: "var(--ink)",
           }}
         >
-          Satu pertanyaan, satu jawaban tersitasi.
+          {t("landing.demo.h2")}
         </h2>
       </div>
 
@@ -261,17 +298,16 @@ function LandingDemo() {
       >
         <div style={{ padding: "18px 22px", borderBottom: "1px solid var(--rule)" }}>
           <div className="label" style={{ marginBottom: 6 }}>
-            Pertanyaan
+            {t("landing.demo.q_label")}
           </div>
           <div style={{ fontSize: 15, color: "var(--ink)", lineHeight: 1.5 }}>
-            Pasien dewasa dengan DBD derajat II, trombosit 45.000. Kapan harus
-            dirujuk dari Puskesmas?
+            {t("landing.demo.q")}
           </div>
         </div>
 
         <div style={{ padding: "18px 22px" }}>
           <div className="label" style={{ marginBottom: 8 }}>
-            Jawaban
+            {t("landing.demo.a_label")}
           </div>
           <div
             style={{
@@ -279,13 +315,13 @@ function LandingDemo() {
               lineHeight: 1.65,
               color: "var(--ink)",
             }}
-          >
-            Rujuk bila pasien menunjukkan tanda syok (tekanan nadi ≤ 20 mmHg,
-            akral dingin, CRT &gt; 2 detik)<span className="cite">1</span>,
-            perdarahan spontan masif<span className="cite">2</span>, atau
-            trombosit turun &lt; 100.000 dengan hematokrit meningkat ≥ 20% dari
-            baseline<span className="cite">1</span>.
-          </div>
+            dangerouslySetInnerHTML={{
+              __html: t("landing.demo.a_html").replace(
+                /<sup>\[(\d+)\]<\/sup>/g,
+                (_m, n) => `<span class="cite">${n}</span>`,
+              ),
+            }}
+          />
 
           <div
             style={{
@@ -301,7 +337,7 @@ function LandingDemo() {
               className="mono"
               style={{ fontSize: 10.5, color: "var(--ink-3)" }}
             >
-              2 sitasi · PPK FKTP
+              {t("landing.demo.meta")}
             </span>
           </div>
 
@@ -380,6 +416,7 @@ function MiniRef({ n, doc, page }: { n: number; doc: string; page: string }) {
 }
 
 function LandingLegal() {
+  const { t } = useI18n();
   return (
     <section
       style={{
@@ -389,41 +426,41 @@ function LandingLegal() {
         borderTop: "1px solid var(--rule)",
       }}
     >
-      <div style={{ display: "grid", gap: 20, gridTemplateColumns: "minmax(0, 1fr)" }}>
+      <div
+        style={{
+          padding: "18px 22px",
+          borderLeft: "2px solid var(--oxblood)",
+          background: "var(--paper-2)",
+          maxWidth: 780,
+        }}
+      >
         <div
+          className="mono"
           style={{
-            padding: "18px 22px",
-            borderLeft: "2px solid var(--oxblood)",
-            background: "var(--paper-2)",
-            maxWidth: 780,
+            fontSize: 10.5,
+            color: "var(--oxblood)",
+            letterSpacing: "0.12em",
+            marginBottom: 6,
           }}
         >
-          <div
-            className="mono"
-            style={{
-              fontSize: 10.5,
-              color: "var(--oxblood)",
-              letterSpacing: "0.12em",
-              marginBottom: 6,
-            }}
-          >
-            DASAR HUKUM
-          </div>
-          <p style={{ fontSize: 14, color: "var(--ink-2)", lineHeight: 1.6, margin: 0 }}>
-            <strong style={{ color: "var(--ink)" }}>
-              UU No. 28/2014 Pasal 42
-            </strong>{" "}
-            menetapkan peraturan perundang-undangan dan keputusan pejabat
-            pemerintah sebagai <em>public domain</em>. Anamnesa hanya mengindeks
-            dokumen yang sah disebar ulang — PPK FKTP, PNPK, dan Kepmenkes.
-          </p>
+          {t("landing.legal.eyebrow")}
         </div>
+        <p
+          style={{
+            fontSize: 14,
+            color: "var(--ink-2)",
+            lineHeight: 1.6,
+            margin: 0,
+          }}
+          dangerouslySetInnerHTML={{ __html: t("landing.legal.body_html") }}
+        />
       </div>
     </section>
   );
 }
 
 function LandingCTA() {
+  const { t } = useI18n();
   return (
     <section
       style={{
@@ -457,7 +494,7 @@ function LandingCTA() {
               lineHeight: 1.15,
             }}
           >
-            Tanya dalam Bahasa Indonesia.
+            {t("landing.cta_band.h2")}
           </h2>
           <p
             style={{
@@ -469,8 +506,7 @@ function LandingCTA() {
               maxWidth: 520,
             }}
           >
-            Alat rujukan klinis, bukan alat diagnosis. Keputusan tata laksana
-            tetap menjadi kewajiban klinisi.
+            {t("landing.cta_band.sub")}
           </p>
         </div>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -485,7 +521,7 @@ function LandingCTA() {
               justifyContent: "center",
             }}
           >
-            Buka aplikasi →
+            {t("landing.cta.open")}
           </Link>
           <Link
             href="/guideline"
@@ -498,7 +534,7 @@ function LandingCTA() {
               justifyContent: "center",
             }}
           >
-            Jelajahi 80 dokumen
+            {t("landing.cta.explore")}
           </Link>
         </div>
       </div>
@@ -507,6 +543,7 @@ function LandingCTA() {
 }
 
 function LandingFooter() {
+  const { t } = useI18n();
   return (
     <footer
       style={{
@@ -534,10 +571,8 @@ function LandingFooter() {
               marginTop: 10,
               lineHeight: 1.55,
             }}
-          >
-            Alat rujukan klinis, <strong>bukan alat diagnosis</strong>.
-            Keputusan tata laksana tetap menjadi kewajiban klinisi.
-          </p>
+            dangerouslySetInnerHTML={{ __html: t("landing.footer.disclaimer") }}
+          />
         </div>
         <div
           className="mono"
@@ -548,8 +583,8 @@ function LandingFooter() {
             lineHeight: 1.6,
           }}
         >
-          <div>© 2026 Anamnesa</div>
-          <div>UU 28/2014 Ps. 42 · domain publik</div>
+          <div>{t("landing.footer.copyright")}</div>
+          <div>{t("landing.footer.legal")}</div>
           <div>anamnesa.kudaliar.id</div>
         </div>
       </div>

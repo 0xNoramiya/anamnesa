@@ -4,20 +4,21 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { NAV_ITEMS } from "./Sidebar";
 import { NavIcon } from "./NavIcon";
+import { useI18n } from "./LanguageProvider";
 
 /**
  * Bottom tab bar for phones. Shows the 5 most-used sections; Agent Track
  * stays hidden on mobile (power-user surface, accessed via the in-view
  * trace rail on Chat).
+ *
+ * `position: fixed` so long answer threads don't push the bar off the
+ * viewport. Main content gets a matching bottom padding via
+ * .shell-main-inner so the last row isn't hidden behind the bar.
  */
 export function MobileTabBar() {
   const pathname = usePathname();
+  const { t } = useI18n();
   const tabs = NAV_ITEMS.slice(0, 5);
-  // `position: fixed` locks the bar to the viewport bottom regardless of
-  // content height — crucial on mobile where long answer threads used
-  // to push a sticky bar off-screen and let the page scroll past it.
-  // Main content gets a matching bottom padding via .shell-main-inner so
-  // the last-line content isn't hidden behind the bar.
   return (
     <nav
       style={{
@@ -33,12 +34,12 @@ export function MobileTabBar() {
         zIndex: 40,
       }}
     >
-      {tabs.map((t) => {
-        const active = pathname === t.href || pathname.startsWith(t.href + "/");
+      {tabs.map((tab) => {
+        const active = pathname === tab.href || pathname.startsWith(tab.href + "/");
         return (
           <Link
-            key={t.id}
-            href={t.href}
+            key={tab.id}
+            href={tab.href}
             style={{
               flex: 1,
               display: "flex",
@@ -58,8 +59,8 @@ export function MobileTabBar() {
               textDecoration: "none",
             }}
           >
-            <NavIcon name={t.icon} size={19} />
-            <span>{t.label}</span>
+            <NavIcon name={tab.icon} size={19} />
+            <span>{t(tab.labelKey)}</span>
           </Link>
         );
       })}

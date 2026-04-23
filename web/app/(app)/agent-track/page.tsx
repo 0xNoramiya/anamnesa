@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import Link from "next/link";
 import { TopBar } from "@/components/shell/TopBar";
 import { useHistory, type HistoryEntry } from "@/lib/useHistory";
+import { useI18n } from "@/components/shell/LanguageProvider";
 
 /**
  * Agent Track — list of past query runs reconstructed from the client's
@@ -14,6 +15,7 @@ import { useHistory, type HistoryEntry } from "@/lib/useHistory";
  */
 export default function AgentTrackPage() {
   const history = useHistory();
+  const { t } = useI18n();
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const entries = history.entries;
@@ -25,8 +27,8 @@ export default function AgentTrackPage() {
   return (
     <>
       <TopBar
-        title="Agent Track"
-        subtitle="// jejak eksekusi per kueri · diambil dari riwayat lokal"
+        title={t("topbar.trace.title")}
+        subtitle={`// ${t("topbar.trace.sub")}`}
       />
       <div className="agent-track-shell">
         <aside
@@ -42,12 +44,12 @@ export default function AgentTrackPage() {
               borderBottom: "1px solid var(--rule)",
             }}
           >
-            <div className="label">Jejak terbaru</div>
+            <div className="label">{t("page.trace.runs_title")}</div>
             <div
               className="mono"
               style={{ fontSize: 10.5, color: "var(--ink-3)", marginTop: 4 }}
             >
-              {entries.length} run · peramban ini
+              {entries.length} {t("page.trace.runs_sub")}
             </div>
           </div>
           {entries.length === 0 ? (
@@ -59,11 +61,15 @@ export default function AgentTrackPage() {
                 padding: "20px 14px",
               }}
             >
-              Belum ada run. Tanyakan sesuatu di{" "}
-              <Link href="/chat" style={{ color: "var(--navy)" }}>
-                Chat
-              </Link>{" "}
-              untuk melihat jejak di sini.
+              {t("page.trace.no_runs_html").split(/<a>|<\/a>/).map((part, i) =>
+                i === 1 ? (
+                  <Link key={i} href="/chat" style={{ color: "var(--navy)" }}>
+                    {part}
+                  </Link>
+                ) : (
+                  <span key={i}>{part}</span>
+                ),
+              )}
             </div>
           ) : (
             entries.map((e) => {
@@ -172,6 +178,7 @@ function StatusChip({ status }: { status: "done" | "refused" | "cached" }) {
 }
 
 function TraceDetail({ entry }: { entry: HistoryEntry }) {
+  const { t } = useI18n();
   const fin = entry.final;
   const refused = !!fin.refusal_reason;
   return (
@@ -214,14 +221,23 @@ function TraceDetail({ entry }: { entry: HistoryEntry }) {
           marginTop: 22,
         }}
       >
-        <Stat label="Status" value={refused ? "Refused" : fin.from_cache ? "Cache hit" : "Answered"} />
-        <Stat label="Sitasi" value={String(fin.citations.length)} />
-        <Stat label="Bendera" value={String(fin.currency_flags.length)} />
         <Stat
-          label="Cache"
+          label={t("page.trace.stat.status")}
+          value={
+            refused
+              ? t("page.trace.status.refused")
+              : fin.from_cache
+                ? t("page.trace.status.cached")
+                : t("page.trace.status.done")
+          }
+        />
+        <Stat label={t("page.trace.stat.cites")} value={String(fin.citations.length)} />
+        <Stat label={t("page.trace.stat.flags")} value={String(fin.currency_flags.length)} />
+        <Stat
+          label={t("page.trace.stat.cache")}
           value={
             fin.from_cache
-              ? `${Math.round((fin.cached_age_s ?? 0) / 60)} mnt lalu`
+              ? `${Math.round((fin.cached_age_s ?? 0) / 60)}m ago`
               : "—"
           }
         />
@@ -243,7 +259,7 @@ function TraceDetail({ entry }: { entry: HistoryEntry }) {
             className="mono"
             style={{ fontSize: 10.5, letterSpacing: "0.12em", marginBottom: 4 }}
           >
-            ALASAN
+            {t("page.trace.reason_label")}
           </div>
           {fin.refusal_reason}
         </div>
@@ -251,7 +267,7 @@ function TraceDetail({ entry }: { entry: HistoryEntry }) {
 
       <div style={{ marginTop: 24 }}>
         <div className="label" style={{ marginBottom: 10 }}>
-          Ringkasan kutipan
+          {t("page.trace.cites_summary")}
         </div>
         {fin.citations.length === 0 ? (
           <div
@@ -264,7 +280,7 @@ function TraceDetail({ entry }: { entry: HistoryEntry }) {
               borderRadius: 2,
             }}
           >
-            Tidak ada kutipan untuk ditampilkan.
+            {t("page.trace.no_cites")}
           </div>
         ) : (
           <ol style={{ listStyle: "none", padding: 0, margin: 0, display: "flex", flexDirection: "column", gap: 10 }}>
@@ -327,8 +343,7 @@ function TraceDetail({ entry }: { entry: HistoryEntry }) {
           lineHeight: 1.55,
         }}
       >
-        Jejak per-fase hanya dipancarkan secara langsung ke trace-rail saat kueri
-        aktif. Riwayat ini merekonstruksi hasil akhir dari cache lokal.
+        {t("page.trace.footer_note")}
       </p>
     </div>
   );
@@ -366,6 +381,7 @@ function Stat({ label, value }: { label: string; value: string }) {
 }
 
 function EmptyDetail() {
+  const { t } = useI18n();
   return (
     <div
       style={{
@@ -383,11 +399,10 @@ function EmptyDetail() {
           marginBottom: 10,
         }}
       >
-        § PILIH RUN
+        {t("page.trace.pick_run_eyebrow")}
       </div>
       <p style={{ fontSize: 13.5, lineHeight: 1.55, maxWidth: 360, margin: "0 auto" }}>
-        Pilih salah satu kueri di sebelah kiri untuk melihat ringkasan kutipan
-        dan alasan penolakan (bila ada).
+        {t("page.trace.pick_run_body")}
       </p>
       <Link
         href="/chat"
@@ -399,7 +414,7 @@ function EmptyDetail() {
           display: "inline-flex",
         }}
       >
-        Mulai run baru →
+        {t("page.trace.new_run")}
       </Link>
     </div>
   );

@@ -5,23 +5,24 @@ import { usePathname } from "next/navigation";
 import { LogoMark, Wordmark } from "./Logo";
 import { NavIcon, type NavIconName } from "./NavIcon";
 import { useTheme } from "./ThemeProvider";
+import { useI18n } from "./LanguageProvider";
 
 interface NavItem {
   id: string;
-  label: string;
-  sub: string;
+  labelKey: string;
+  subKey: string;
   icon: NavIconName;
   shortcut: string;
   href: string;
 }
 
 export const NAV_ITEMS: NavItem[] = [
-  { id: "chat",      label: "Chat",        sub: "Mode Agen",         icon: "chat",   shortcut: "G C", href: "/chat" },
-  { id: "pencarian", label: "Pencarian",   sub: "Cari cepat",        icon: "search", shortcut: "G P", href: "/pencarian" },
-  { id: "guideline", label: "Guideline",   sub: "Pustaka dokumen",   icon: "book",   shortcut: "G G", href: "/guideline" },
-  { id: "riwayat",   label: "Riwayat",     sub: "Kueri tersimpan",   icon: "clock",  shortcut: "G R", href: "/riwayat" },
-  { id: "favorit",   label: "Favorit",     sub: "Pintasan pribadi",  icon: "star",   shortcut: "G F", href: "/favorit" },
-  { id: "trace",     label: "Agent Track", sub: "Jejak eksekusi",    icon: "trace",  shortcut: "G T", href: "/agent-track" },
+  { id: "chat",      labelKey: "nav.chat",       subKey: "nav.chat.sub",       icon: "chat",   shortcut: "G C", href: "/chat" },
+  { id: "pencarian", labelKey: "nav.search",     subKey: "nav.search.sub",     icon: "search", shortcut: "G P", href: "/pencarian" },
+  { id: "guideline", labelKey: "nav.guideline",  subKey: "nav.guideline.sub",  icon: "book",   shortcut: "G G", href: "/guideline" },
+  { id: "riwayat",   labelKey: "nav.history",    subKey: "nav.history.sub",    icon: "clock",  shortcut: "G R", href: "/riwayat" },
+  { id: "favorit",   labelKey: "nav.favorites",  subKey: "nav.favorites.sub",  icon: "star",   shortcut: "G F", href: "/favorit" },
+  { id: "trace",     labelKey: "nav.trace",      subKey: "nav.trace.sub",      icon: "trace",  shortcut: "G T", href: "/agent-track" },
 ];
 
 interface Props {
@@ -31,6 +32,7 @@ interface Props {
 export function Sidebar({ collapsed = false }: Props) {
   const pathname = usePathname();
   const { dark, toggle } = useTheme();
+  const { t, toggle: toggleLang } = useI18n();
 
   const isActive = (href: string) => pathname === href || pathname.startsWith(href + "/");
 
@@ -54,7 +56,11 @@ export function Sidebar({ collapsed = false }: Props) {
           borderBottom: "1px solid var(--rule)",
         }}
       >
-        <Link href="/" aria-label="Anamnesa — beranda" style={{ textDecoration: "none", color: "inherit" }}>
+        <Link
+          href="/"
+          aria-label={t("sidebar.home")}
+          style={{ textDecoration: "none", color: "inherit" }}
+        >
           {collapsed ? <LogoMark size={28} /> : <Wordmark size={17} />}
         </Link>
       </div>
@@ -66,16 +72,18 @@ export function Sidebar({ collapsed = false }: Props) {
       >
         {!collapsed && (
           <div className="label" style={{ padding: "0 10px 8px" }}>
-            Navigasi
+            {t("nav.navigation")}
           </div>
         )}
         {NAV_ITEMS.map((item) => {
           const active = isActive(item.href);
+          const label = t(item.labelKey);
+          const sub = t(item.subKey);
           return (
             <Link
               key={item.id}
               href={item.href}
-              title={collapsed ? item.label : undefined}
+              title={collapsed ? label : undefined}
               style={{
                 display: "flex",
                 alignItems: "center",
@@ -101,9 +109,9 @@ export function Sidebar({ collapsed = false }: Props) {
               <NavIcon name={item.icon} />
               {!collapsed && (
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div>{item.label}</div>
+                  <div>{label}</div>
                   <div className="mono" style={{ fontSize: 10.5, color: "var(--ink-4)", marginTop: 1 }}>
-                    {item.sub}
+                    {sub}
                   </div>
                 </div>
               )}
@@ -117,7 +125,7 @@ export function Sidebar({ collapsed = false }: Props) {
         })}
       </nav>
 
-      {/* Bottom: trust footer + theme toggle */}
+      {/* Bottom: trust footer + language + theme toggles */}
       <div
         style={{
           borderTop: "1px solid var(--rule)",
@@ -134,35 +142,61 @@ export function Sidebar({ collapsed = false }: Props) {
               marginBottom: 10,
             }}
           >
-            Korpus: <span style={{ color: "var(--ink)" }}>80 dokumen</span> · {" "}
-            <span style={{ color: "var(--ink)" }}>8.864 potongan</span>
+            {t("sidebar.corpus_prefix")}{" "}
+            <span style={{ color: "var(--ink)" }}>{t("sidebar.docs")}</span> · {" "}
+            <span style={{ color: "var(--ink)" }}>{t("sidebar.chunks")}</span>
             <br />
-            Basis hukum: UU 28/2014 Ps. 42
+            {t("sidebar.legal")}
           </div>
         )}
-        <button
-          type="button"
-          onClick={toggle}
-          style={{
-            display: "flex",
-            alignItems: "center",
-            gap: 8,
-            width: "100%",
-            padding: "7px 10px",
-            background: "transparent",
-            border: "1px solid var(--rule)",
-            borderRadius: 2,
-            color: "var(--ink-2)",
-            cursor: "pointer",
-            fontSize: 12.5,
-            fontFamily: "var(--font-body-stack)",
-            justifyContent: collapsed ? "center" : "flex-start",
-          }}
-          aria-label={dark ? "Alihkan ke mode terang" : "Alihkan ke mode gelap"}
-        >
-          <NavIcon name={dark ? "sun" : "moon"} size={14} />
-          {!collapsed && <span>{dark ? "Mode terang" : "Mode gelap"}</span>}
-        </button>
+        <div style={{ display: "flex", gap: 6 }}>
+          <button
+            type="button"
+            onClick={toggle}
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              flex: 1,
+              padding: "7px 10px",
+              background: "transparent",
+              border: "1px solid var(--rule)",
+              borderRadius: 2,
+              color: "var(--ink-2)",
+              cursor: "pointer",
+              fontSize: 12.5,
+              fontFamily: "var(--font-body-stack)",
+              justifyContent: collapsed ? "center" : "flex-start",
+            }}
+            aria-label={dark ? t("sidebar.theme_light") : t("sidebar.theme_dark")}
+          >
+            <NavIcon name={dark ? "sun" : "moon"} size={14} />
+            {!collapsed && (
+              <span>{dark ? t("sidebar.theme_light") : t("sidebar.theme_dark")}</span>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={toggleLang}
+            title={t("sidebar.toggle_language")}
+            aria-label={t("sidebar.toggle_language")}
+            className="mono"
+            style={{
+              padding: "7px 10px",
+              background: "transparent",
+              border: "1px solid var(--rule)",
+              borderRadius: 2,
+              color: "var(--ink-2)",
+              cursor: "pointer",
+              fontSize: 11,
+              letterSpacing: "0.08em",
+              textTransform: "uppercase",
+              minWidth: collapsed ? 40 : "auto",
+            }}
+          >
+            {t("sidebar.toggle_language").slice(0, 2).toUpperCase() === "EN" ? "EN" : "ID"}
+          </button>
+        </div>
       </div>
     </aside>
   );

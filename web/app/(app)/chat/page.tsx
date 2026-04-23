@@ -1,12 +1,14 @@
+"use client";
+
 import { TopBar } from "@/components/shell/TopBar";
 import { ChatMode } from "@/components/app/ChatMode";
-
-export const metadata = { title: "Chat · Anamnesa" };
+import { useI18n } from "@/components/shell/LanguageProvider";
 
 export default function ChatPage() {
+  const { t } = useI18n();
   return (
     <>
-      <TopBar title="Mode Agen" subtitle="// agentic RAG · dengan sitasi halaman" />
+      <TopBar title={t("topbar.chat.title")} subtitle={`// ${t("topbar.chat.sub")}`} />
       <ChatMode />
     </>
   );

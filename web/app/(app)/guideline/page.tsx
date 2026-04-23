@@ -9,6 +9,7 @@ import {
 import { PdfViewer } from "@/components/PdfViewer";
 import { useRouter } from "next/navigation";
 import { useFavorites } from "@/lib/useFavorites";
+import { useI18n } from "@/components/shell/LanguageProvider";
 
 const API_BASE = process.env.NEXT_PUBLIC_ANAMNESA_API ?? "";
 
@@ -48,6 +49,7 @@ function currencyFromStatus(s?: string, year?: number): CurrencyKind {
 
 export default function GuidelinePage() {
   const router = useRouter();
+  const { t } = useI18n();
   const [meta, setMeta] = useState<ManifestSummary | null>(null);
   const [docs, setDocs] = useState<DocumentLite[]>([]);
   const [loading, setLoading] = useState(true);
@@ -110,8 +112,8 @@ export default function GuidelinePage() {
   return (
     <>
       <TopBar
-        title="Pustaka Guideline"
-        subtitle="// 80 dokumen · PPK FKTP · PNPK · Kepmenkes"
+        title={t("topbar.guideline.title")}
+        subtitle={`// ${t("topbar.guideline.sub")}`}
       />
       <div className="guideline-shell">
         {/* Filters */}
