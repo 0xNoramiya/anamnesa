@@ -13,6 +13,7 @@ import {
   downloadText,
   suggestedFilename,
 } from "@/lib/exportMarkdown";
+import { useFavorites } from "@/lib/useFavorites";
 import { FeedbackBar } from "./FeedbackBar";
 
 interface Props {
@@ -312,6 +313,8 @@ function ReferenceCard({
   onOpenPdf?: (docId: string, page: number) => void;
 }) {
   const [copied, setCopied] = useState(false);
+  const fav = useFavorites();
+  const starred = fav.isFav("chunk", citation.key);
   const sourceType = citation.doc_id.startsWith("ppk-fktp")
     ? "PPK FKTP"
     : citation.doc_id.startsWith("pnpk")
@@ -394,6 +397,19 @@ function ReferenceCard({
                 <path d="M4 16V4a2 2 0 0 1 2-2h10" />
               </svg>
               {copied ? "Tersalin ✓" : "Salin kutipan"}
+            </button>
+            <button
+              type="button"
+              onClick={() => fav.toggleChunk(citation)}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md
+                         border border-paper-edge text-caption font-medium
+                         hover:bg-paper-deep transition-colors"
+              style={{ color: starred ? "var(--aging)" : "var(--ink-faint, #64748B)" }}
+              title={starred ? "Hapus dari Favorit" : "Simpan kutipan ke Favorit"}
+              aria-pressed={starred}
+            >
+              <span style={{ fontSize: 13, lineHeight: 1 }}>{starred ? "★" : "☆"}</span>
+              {starred ? "Tersimpan" : "Simpan"}
             </button>
           </div>
         </div>
@@ -570,6 +586,8 @@ function ExportActions({
   queryText?: string;
 }) {
   const [copied, setCopied] = useState(false);
+  const fav = useFavorites();
+  const starred = fav.isFav("answer", final.query_id);
 
   const buildMd = () => buildAnswerMarkdown(queryText ?? "", final);
 
@@ -600,6 +618,12 @@ function ExportActions({
 
   const handleDownload = () => {
     downloadText(suggestedFilename(), buildMd());
+  };
+
+  const handleStar = () => {
+    // Only stars when we have a query text — stars-without-query can't
+    // be replayed meaningfully from Favorit.
+    fav.toggleAnswer(queryText ?? "", final);
   };
 
   return (
@@ -634,6 +658,18 @@ function ExportActions({
           <path d="M5 21h14" />
         </svg>
         Unduh .md
+      </button>
+      <button
+        type="button"
+        onClick={handleStar}
+        className="inline-flex items-center gap-1.5 text-caption font-mono
+                   uppercase tracking-editorial hover:bg-paper-deep px-2.5 py-1.5
+                   rounded-md transition-colors"
+        style={{ color: starred ? "var(--aging)" : "var(--ink-faint, #64748B)" }}
+        title={starred ? "Hapus dari Favorit" : "Simpan ke Favorit"}
+      >
+        <span style={{ fontSize: 14, lineHeight: 1 }}>{starred ? "★" : "☆"}</span>
+        {starred ? "Tersimpan" : "Simpan"}
       </button>
     </div>
   );

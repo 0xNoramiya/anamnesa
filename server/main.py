@@ -23,6 +23,7 @@ import asyncio
 import json
 import os
 from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -257,19 +258,55 @@ def _detect_version() -> dict[str, str]:
 
 
 @app.get("/api/manifest")
-async def manifest_summary() -> dict[str, Any]:
+async def manifest_summary(full: int = 0) -> dict[str, Any]:
+    """Aggregates (default) + optionally a flat list of documents when
+    `?full=1` — consumed by the /guideline library UI."""
     m: Manifest = app.state.manifest
     by_status: dict[str, int] = {}
     by_source: dict[str, int] = {}
     for d in m.documents:
         by_status[d.status] = by_status.get(d.status, 0) + 1
         by_source[d.source_type] = by_source.get(d.source_type, 0) + 1
-    return {
+
+    payload: dict[str, Any] = {
         "schema_version": m.schema_version,
         "total": len(m.documents),
         "by_status": by_status,
         "by_source_type": by_source,
     }
+
+    if full:
+        this_year = datetime.now(UTC).year
+        documents: list[dict[str, Any]] = []
+        for d in m.documents:
+            if d.superseded_by:
+                currency = "superseded"
+            elif d.status == "failed":
+                currency = "unknown"
+            elif d.year and d.year <= this_year - 5:
+                currency = "aging"
+            else:
+                currency = "current"
+            documents.append(
+                {
+                    "doc_id": d.doc_id,
+                    "title": d.title,
+                    "source_type": d.source_type,
+                    "year": d.year,
+                    "pages": d.pages,
+                    "authority": d.authority,
+                    "kepmenkes_number": d.kepmenkes_number,
+                    "status": d.status,
+                    "currency_status": currency,
+                    "superseded_by": list(d.superseded_by),
+                    "supersedes": list(d.supersedes),
+                }
+            )
+        # Stable sort: newest year first, then title.
+        documents.sort(key=lambda r: (-(r["year"] or 0), r["title"].lower()))
+        payload["documents"] = documents
+
+    return payload
 
 
 @app.get("/api/search")

@@ -8,6 +8,7 @@ import {
 } from "@/components/shell/CurrencyChip";
 import { PdfViewer } from "@/components/PdfViewer";
 import { useRouter } from "next/navigation";
+import { useFavorites } from "@/lib/useFavorites";
 
 const API_BASE = process.env.NEXT_PUBLIC_ANAMNESA_API ?? "";
 
@@ -112,17 +113,16 @@ export default function GuidelinePage() {
         title="Pustaka Guideline"
         subtitle="// 80 dokumen · PPK FKTP · PNPK · Kepmenkes"
       />
-      <div style={{ display: "flex", minHeight: "calc(100vh - 64px)" }}>
+      <div className="guideline-shell">
         {/* Filters */}
         <aside
+          className="guideline-filters scroll-civic"
           style={{
-            width: 228,
             borderRight: "1px solid var(--rule)",
             background: "var(--paper-2)",
             padding: "20px 18px",
             flexShrink: 0,
           }}
-          className="scroll-civic"
         >
           <div className="label" style={{ marginBottom: 10 }}>
             Jenis sumber
@@ -173,13 +173,12 @@ export default function GuidelinePage() {
 
         {/* List */}
         <div
+          className="guideline-list scroll-civic"
           style={{
-            flex: 1,
             minWidth: 0,
             borderRight: "1px solid var(--rule)",
             overflowY: "auto",
           }}
-          className="scroll-civic"
         >
           <div
             style={{
@@ -221,19 +220,16 @@ export default function GuidelinePage() {
           </div>
 
           <div
+            className="guideline-row-head label"
             style={{
-              display: "grid",
-              gridTemplateColumns: "1.2fr 110px 70px 130px",
-              gap: 14,
-              padding: "10px 28px",
+              padding: "10px 20px",
               background: "var(--paper-2)",
               borderBottom: "1px solid var(--rule)",
             }}
-            className="label"
           >
             <div>Judul</div>
-            <div>Jenis</div>
-            <div>Tahun</div>
+            <div className="guideline-list-cell-sm">Jenis</div>
+            <div className="guideline-list-cell-sm">Tahun</div>
             <div>Status</div>
           </div>
 
@@ -258,12 +254,10 @@ export default function GuidelinePage() {
               <button
                 key={d.doc_id}
                 onClick={() => setSelected(d.doc_id)}
+                className="guideline-row"
                 style={{
-                  display: "grid",
-                  gridTemplateColumns: "1.2fr 110px 70px 130px",
-                  gap: 14,
                   width: "100%",
-                  padding: "14px 28px",
+                  padding: "14px 20px",
                   background: selectedRow ? "var(--paper-3)" : "transparent",
                   border: "none",
                   borderBottom: "1px solid var(--rule)",
@@ -272,7 +266,6 @@ export default function GuidelinePage() {
                     : "2px solid transparent",
                   cursor: "pointer",
                   textAlign: "left",
-                  alignItems: "center",
                   fontFamily: "var(--font-body-stack)",
                   color: "var(--ink)",
                 }}
@@ -292,15 +285,15 @@ export default function GuidelinePage() {
                   </div>
                   <div
                     className="mono"
-                    style={{ fontSize: 10.5, color: "var(--ink-3)", marginTop: 2 }}
+                    style={{ fontSize: 10.5, color: "var(--ink-3)", marginTop: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
                   >
-                    {d.doc_id}
+                    {d.doc_id} · {SOURCE_LABEL[d.source_type] ?? d.source_type} · {d.year}
                   </div>
                 </div>
-                <div className="mono" style={{ fontSize: 11, color: "var(--ink-2)" }}>
+                <div className="mono guideline-list-cell-sm" style={{ fontSize: 11, color: "var(--ink-2)" }}>
                   {SOURCE_LABEL[d.source_type] ?? d.source_type}
                 </div>
-                <div className="mono" style={{ fontSize: 11.5, color: "var(--ink-2)" }}>
+                <div className="mono guideline-list-cell-sm" style={{ fontSize: 11.5, color: "var(--ink-2)" }}>
                   {d.year}
                 </div>
                 <div>
@@ -313,13 +306,12 @@ export default function GuidelinePage() {
 
         {/* Detail */}
         <aside
+          className="guideline-detail scroll-civic"
           style={{
-            width: 340,
             flexShrink: 0,
             background: "var(--paper)",
             overflowY: "auto",
           }}
-          className="scroll-civic"
         >
           {selectedDoc ? (
             <DocumentDetail
@@ -403,6 +395,8 @@ function DocumentDetail({
   onOpen: () => void;
 }) {
   const flag = currencyFromStatus(doc.currency_status, doc.year);
+  const fav = useFavorites();
+  const starred = fav.isFav("doc", doc.doc_id);
   return (
     <div>
       <div style={{ padding: "20px 22px", borderBottom: "1px solid var(--rule)" }}>
@@ -441,12 +435,12 @@ function DocumentDetail({
           {doc.doc_id}
         </div>
 
-        <div style={{ display: "flex", gap: 6, marginTop: 16 }}>
+        <div style={{ display: "flex", gap: 6, marginTop: 16, flexWrap: "wrap" }}>
           <button
             type="button"
             onClick={onAsk}
             className="btn btn-primary"
-            style={{ padding: "7px 12px", fontSize: 12, flex: 1, justifyContent: "center" }}
+            style={{ padding: "7px 12px", fontSize: 12, flex: 1, justifyContent: "center", minWidth: 160 }}
           >
             Tanya Anamnesa →
           </button>
@@ -457,6 +451,28 @@ function DocumentDetail({
             style={{ padding: "7px 12px", fontSize: 12 }}
           >
             Buka PDF ↗
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              fav.toggleDoc({
+                doc_id: doc.doc_id,
+                title: doc.title,
+                source_type: doc.source_type,
+                year: doc.year,
+                currency_status: doc.currency_status,
+              })
+            }
+            className="btn btn-ghost"
+            style={{
+              padding: "7px 10px",
+              fontSize: 12,
+              color: starred ? "var(--aging)" : "var(--ink-2)",
+            }}
+            title={starred ? "Hapus dari Favorit" : "Simpan ke Favorit"}
+            aria-pressed={starred}
+          >
+            {starred ? "★ Tersimpan" : "☆ Simpan"}
           </button>
         </div>
       </div>

@@ -1,13 +1,14 @@
 /* App shell — sidebar + main at desktop, stacked + bottom tabs at mobile.
- * Tailwind is available but this layout is small and touches a lot of
- * flex/min-height edge cases; keeping it as a standalone stylesheet
- * makes it trivial to audit. */
+ * Tailwind is available but this layout touches enough viewport / sticky
+ * edge cases that a standalone stylesheet is easier to audit. */
 
 .shell-root {
   display: flex;
   min-height: 100vh;
   background: var(--paper);
   color: var(--ink);
+  overflow-x: hidden;  /* belt-and-braces — prevent any stray wide child
+                          from horizontally scrolling the app */
 }
 
 .shell-sidebar {
@@ -24,6 +25,9 @@
 .shell-main-inner {
   flex: 1;
   min-width: 0;
+  /* Room for the fixed mobile tab bar (62px + iOS safe-area).
+     Reset to 0 on desktop via the media query below. */
+  padding-bottom: calc(62px + env(safe-area-inset-bottom));
 }
 
 .shell-mobile-tabs {
@@ -37,7 +41,109 @@
     top: 0;
     height: 100vh;
   }
+  .shell-main-inner {
+    padding-bottom: 0;
+  }
   .shell-mobile-tabs {
     display: none;
+  }
+}
+
+/* -----------------------------------------------------------------
+ * Guideline page — 3-column on desktop, stacked on mobile.
+ * Filters + detail collapse into horizontal-scroll chip rows /
+ * slide-in details on phones; the list always fills width.
+ * -------------------------------------------------------------- */
+.guideline-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 64px);
+}
+.guideline-filters {
+  /* On mobile: horizontal strip at the top, width auto, overflow-x */
+  width: 100%;
+  overflow-x: auto;
+}
+.guideline-list {
+  flex: 1;
+  width: 100%;
+  min-height: 50vh;
+}
+.guideline-detail {
+  width: 100%;
+  border-top: 1px solid var(--rule);
+}
+
+@media (min-width: 1024px) {
+  .guideline-shell {
+    flex-direction: row;
+    min-height: calc(100vh - 64px);
+  }
+  .guideline-filters {
+    width: 228px;
+    overflow-x: visible;
+  }
+  .guideline-list {
+    min-height: 0;
+  }
+  .guideline-detail {
+    width: 340px;
+    border-top: none;
+  }
+}
+
+/* The table row grid columns — trim to title + status on narrow mobile,
+   show full 4-column grid on wider screens. */
+.guideline-row,
+.guideline-row-head {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 90px;
+  gap: 10px;
+  align-items: center;
+}
+@media (min-width: 640px) {
+  .guideline-row,
+  .guideline-row-head {
+    grid-template-columns: minmax(0, 1.2fr) 90px 60px 120px;
+    gap: 14px;
+  }
+}
+
+.guideline-list-cell-sm {
+  display: none;
+}
+@media (min-width: 640px) {
+  .guideline-list-cell-sm {
+    display: block;
+  }
+}
+
+/* -----------------------------------------------------------------
+ * Agent Track — two-column at desktop, stacked with run list on top
+ * at mobile.
+ * -------------------------------------------------------------- */
+.agent-track-shell {
+  display: flex;
+  flex-direction: column;
+  min-height: calc(100vh - 64px);
+}
+.agent-track-list {
+  width: 100%;
+  max-height: 260px;
+  overflow-y: auto;
+}
+.agent-track-detail {
+  flex: 1;
+  width: 100%;
+  overflow-y: auto;
+}
+@media (min-width: 900px) {
+  .agent-track-shell {
+    flex-direction: row;
+  }
+  .agent-track-list {
+    width: 280px;
+    max-height: none;
+    height: 100%;
   }
 }

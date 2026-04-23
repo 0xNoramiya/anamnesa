@@ -13,10 +13,15 @@ import { NavIcon } from "./NavIcon";
 export function MobileTabBar() {
   const pathname = usePathname();
   const tabs = NAV_ITEMS.slice(0, 5);
+  // `position: fixed` locks the bar to the viewport bottom regardless of
+  // content height — crucial on mobile where long answer threads used
+  // to push a sticky bar off-screen and let the page scroll past it.
+  // Main content gets a matching bottom padding via .shell-main-inner so
+  // the last-line content isn't hidden behind the bar.
   return (
     <nav
       style={{
-        position: "sticky",
+        position: "fixed",
         bottom: 0,
         left: 0,
         right: 0,
@@ -24,8 +29,8 @@ export function MobileTabBar() {
         borderTop: "1px solid var(--rule)",
         display: "flex",
         paddingBottom: "env(safe-area-inset-bottom)",
-        height: 62,
-        zIndex: 20,
+        height: "calc(62px + env(safe-area-inset-bottom))",
+        zIndex: 40,
       }}
     >
       {tabs.map((t) => {

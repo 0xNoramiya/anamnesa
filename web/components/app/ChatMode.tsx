@@ -87,9 +87,9 @@ export function ChatMode() {
   );
 
   return (
-    <div className="mx-auto max-w-[1440px] px-6 lg:px-10 py-6 md:py-8">
-      <div className="grid grid-cols-12 gap-6 pb-16">
-        <section className="col-span-12 lg:col-span-8">
+    <div className="mx-auto max-w-[1440px] px-4 md:px-6 lg:px-10 py-4 md:py-8">
+      <div className="grid grid-cols-12 gap-4 md:gap-6 pb-10">
+        <section className="col-span-12 lg:col-span-8 min-w-0">
           <QueryInput onSubmit={submit} status={stream.status} />
 
           {history.entries.length > 0 && (
@@ -125,8 +125,10 @@ export function ChatMode() {
           )}
         </section>
 
+        {/* Trace sidebar: desktop shows it inline; mobile hides it
+            (users can switch to /agent-track to inspect). */}
         <section
-          className="col-span-12 lg:col-span-4
+          className="hidden lg:block lg:col-span-4
                      lg:sticky lg:top-6 lg:self-start
                      lg:max-h-[calc(100vh-2rem)]"
         >
