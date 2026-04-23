@@ -124,35 +124,22 @@ function LandingHero() {
         </a>
       </div>
 
-      <div
+      <p
         className="mono"
         style={{
-          marginTop: 32,
-          fontSize: 11.5,
+          marginTop: 28,
+          fontSize: 12,
           color: "var(--ink-3)",
-          letterSpacing: "0.04em",
-          display: "flex",
-          flexWrap: "wrap",
-          gap: 14,
-          alignItems: "center",
+          letterSpacing: "0.03em",
+          lineHeight: 1.6,
+          maxWidth: 540,
         }}
       >
-        <span>
-          <strong style={{ color: "var(--ink)" }}>80 dokumen</strong> terindeks
-        </span>
-        <Dot />
-        <span>PPK FKTP · PNPK · Kepmenkes</span>
-        <Dot />
-        <span>UU 28/2014 · domain publik</span>
-        <Dot />
-        <span>Gratis · tanpa pendaftaran</span>
-      </div>
+        <strong style={{ color: "var(--ink)" }}>80 dokumen</strong> dari arsip
+        Kemenkes RI. Gratis, tanpa pendaftaran.
+      </p>
     </section>
   );
-}
-
-function Dot() {
-  return <span style={{ color: "var(--ink-4)" }}>·</span>;
 }
 
 function LandingFeatures() {
