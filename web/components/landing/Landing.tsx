@@ -49,7 +49,7 @@ function LandingHeader() {
       <div style={{ flex: 1 }} />
       <HeaderNavLink href="/legal" label={t("docs.nav.legal")} />
       <HeaderNavLink href="/mcp" label={t("docs.nav.mcp")} />
-      <HeaderNavLink href="/api" label={t("docs.nav.api")} />
+      <HeaderNavLink href="/api-docs" label={t("docs.nav.api")} />
       <LangSwitch lang={lang} onChange={setLang} />
       <Link
         href="/chat"
@@ -668,7 +668,7 @@ function LandingFooter() {
           <div style={{ marginTop: 14, display: "flex", gap: 14, flexWrap: "wrap" }}>
             <FooterLink href="/legal" label={t("docs.nav.legal")} />
             <FooterLink href="/mcp" label={t("docs.nav.mcp")} />
-            <FooterLink href="/api" label={t("docs.nav.api")} />
+            <FooterLink href="/api-docs" label={t("docs.nav.api")} />
           </div>
         </div>
         <div

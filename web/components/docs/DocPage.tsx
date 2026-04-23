@@ -108,7 +108,7 @@ function DocHeader() {
       <div style={{ flex: 1 }} />
       <DocNavLink href="/legal" label={t("docs.nav.legal")} />
       <DocNavLink href="/mcp" label={t("docs.nav.mcp")} />
-      <DocNavLink href="/api" label={t("docs.nav.api")} />
+      <DocNavLink href="/api-docs" label={t("docs.nav.api")} />
       <LangSwitch lang={lang} onChange={setLang} />
       <Link
         href="/chat"
@@ -216,7 +216,7 @@ function DocFooter() {
           <div style={{ marginTop: 14, display: "flex", gap: 14, flexWrap: "wrap" }}>
             <FooterLink href="/legal" label={t("docs.nav.legal")} />
             <FooterLink href="/mcp" label={t("docs.nav.mcp")} />
-            <FooterLink href="/api" label={t("docs.nav.api")} />
+            <FooterLink href="/api-docs" label={t("docs.nav.api")} />
           </div>
         </div>
         <div
