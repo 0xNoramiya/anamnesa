@@ -504,6 +504,112 @@ async def drug_lookup(q: str, limit: int = 15) -> dict[str, Any]:
     }
 
 
+@app.get("/api/drug-mentions")
+async def drug_mentions(
+    q: str,
+    exclude: str = _DRUG_DOC_ID,
+    limit: int = 12,
+) -> dict[str, Any]:
+    """Find pages across the WHOLE corpus (minus Fornas by default) where
+    a drug name is mentioned. Companion to /api/drug-lookup — Fornas
+    tells you whether BPJS covers it, this tells you where PPK/PNPK
+    discuss the clinical use of it.
+
+    Pure case-insensitive substring match over the in-memory BM25 chunk
+    cache — no tokenization, no LLM, ~5-10 ms on 9k chunks.
+    """
+    q_clean = q.strip()
+    if len(q_clean) < 3:
+        raise HTTPException(400, "query must be at least 3 characters")
+    limit = max(1, min(int(limit), 50))
+
+    exclude_ids = {s for s in (exclude or "").split(",") if s.strip()}
+    hybrid: HybridRetriever = app.state.hybrid
+    all_chunks = getattr(hybrid, "_bm25_chunks", []) or []
+
+    q_lower = q_clean.lower()
+    translit_used = False
+
+    def _scan(qlow: str) -> list[dict[str, Any]]:
+        hits: list[dict[str, Any]] = []
+        for c in all_chunks:
+            if c.doc_id in exclude_ids:
+                continue
+            text = c.text or ""
+            n = text.lower().count(qlow)
+            if n == 0:
+                continue
+            hits.append({
+                "doc_id": c.doc_id,
+                "page": int(c.page or 0),
+                "section_path": c.section_path,
+                "section_slug": c.section_slug,
+                "hits": n,
+                "snippet": _drug_snippet(text, qlow),
+            })
+        return hits
+
+    matches = _scan(q_lower)
+    matched_query = q_clean
+    if not matches:
+        translit = _transliterate_en_to_id(q_lower)
+        if translit != q_lower:
+            alt = _scan(translit)
+            if alt:
+                matches = alt
+                matched_query = translit
+                translit_used = True
+
+    # Collapse to one row per (doc_id, page), ranked by hits desc then page asc.
+    matches.sort(key=lambda r: (-r["hits"], r["doc_id"], r["page"]))
+
+    # Attach doc titles + year from the manifest for the UI.
+    m: Manifest = app.state.manifest
+    doc_meta: dict[str, dict[str, Any]] = {
+        d.doc_id: {"title": d.title, "year": d.year, "source_type": d.source_type}
+        for d in m.documents
+    }
+
+    # Per-doc aggregate for the header summary.
+    per_doc: dict[str, dict[str, Any]] = {}
+    for row in matches:
+        did = row["doc_id"]
+        if did not in per_doc:
+            meta = doc_meta.get(did, {})
+            per_doc[did] = {
+                "doc_id": did,
+                "title": meta.get("title", did),
+                "year": meta.get("year"),
+                "source_type": meta.get("source_type"),
+                "page_count": 0,
+                "hit_count": 0,
+            }
+        per_doc[did]["page_count"] += 1
+        per_doc[did]["hit_count"] += row["hits"]
+
+    docs_sorted = sorted(
+        per_doc.values(), key=lambda d: (-d["hit_count"], d["doc_id"])
+    )
+
+    truncated = matches[:limit]
+    # Enrich each row with the doc title for easy UI rendering.
+    for row in truncated:
+        meta = doc_meta.get(row["doc_id"], {})
+        row["title"] = meta.get("title", row["doc_id"])
+        row["year"] = meta.get("year")
+        row["source_type"] = meta.get("source_type")
+
+    return {
+        "query": q_clean,
+        "matched_query": matched_query,
+        "translit_used": translit_used,
+        "total_pages": len(matches),
+        "total_hits": sum(r["hits"] for r in matches),
+        "docs": docs_sorted[:20],
+        "results": truncated,
+    }
+
+
 @app.post("/api/feedback", response_model=FeedbackResponse)
 async def post_feedback(req: FeedbackRequest) -> FeedbackResponse:
     if req.rating not in ("up", "down"):

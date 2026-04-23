@@ -179,6 +179,13 @@ const ID: Dict = {
   "obat.truncated": "+{n} halaman lagi — persempit pencarian untuk melihatnya.",
   "obat.footnote":
     "Fornas berisi daftar obat yang ditanggung BPJS Kesehatan beserta restriksi peresepan. Cantuman di sini bukan indikasi klinis — rujuk PPK / PNPK untuk indikasi dan dosis.",
+
+  // Cross-doc mentions section
+  "obat.mentions.title": "Disebut juga di pedoman lain",
+  "obat.mentions.docs_label": "dokumen",
+  "obat.mentions.caption":
+    "Halaman di PPK / PNPK / Pedoman Program yang menyebut obat ini — konteks klinis di luar Fornas (indikasi, posologi, rekomendasi lini).",
+  "obat.mentions.open": "Buka halaman",
 };
 
 const EN: Dict = {
@@ -331,6 +338,12 @@ const EN: Dict = {
   "obat.truncated": "+{n} more pages — narrow the search to see them.",
   "obat.footnote":
     "Fornas lists drugs covered by BPJS with prescribing restrictions. Listings here are not clinical indications — consult PPK / PNPK for indication and dose.",
+
+  "obat.mentions.title": "Also mentioned in other guidelines",
+  "obat.mentions.docs_label": "documents",
+  "obat.mentions.caption":
+    "Pages in PPK / PNPK / Pedoman Program that mention this drug — clinical context beyond Fornas (indications, posology, line-of-therapy).",
+  "obat.mentions.open": "Open page",
 };
 
 const DICTS: Record<Lang, Dict> = { id: ID, en: EN };

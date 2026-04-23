@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useI18n } from "@/components/shell/LanguageProvider";
 
 const API_BASE = process.env.NEXT_PUBLIC_ANAMNESA_API ?? "";
@@ -22,6 +22,37 @@ interface LookupResponse {
   total_hits: number;
   total_pages: number;
   results: LookupResultRow[];
+}
+
+interface MentionRow {
+  doc_id: string;
+  title: string;
+  year: number | null;
+  source_type: string | null;
+  page: number;
+  section_path: string | null;
+  section_slug: string | null;
+  hits: number;
+  snippet: string;
+}
+
+interface MentionDoc {
+  doc_id: string;
+  title: string;
+  year: number | null;
+  source_type: string | null;
+  page_count: number;
+  hit_count: number;
+}
+
+interface MentionsResponse {
+  query: string;
+  matched_query: string;
+  translit_used: boolean;
+  total_pages: number;
+  total_hits: number;
+  docs: MentionDoc[];
+  results: MentionRow[];
 }
 
 const EXAMPLES = [
@@ -46,6 +77,7 @@ export function DrugLookup() {
   const { t } = useI18n();
   const [value, setValue] = useState("");
   const [data, setData] = useState<LookupResponse | null>(null);
+  const [mentions, setMentions] = useState<MentionsResponse | null>(null);
   const [loading, setLoading] = useState(false);
   const [elapsed, setElapsed] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -58,6 +90,7 @@ export function DrugLookup() {
     const trimmed = q.trim();
     if (trimmed.length < 2) {
       setData(null);
+      setMentions(null);
       setError(null);
       setLoading(false);
       setElapsed(null);
@@ -69,18 +102,33 @@ export function DrugLookup() {
     setError(null);
     const start = performance.now();
     try {
-      const url =
-        `${API_BASE.replace(/\/$/, "")}/api/drug-lookup` +
-        `?q=${encodeURIComponent(trimmed)}&limit=20`;
-      const r = await fetch(url, { signal: ac.signal });
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      const j = (await r.json()) as LookupResponse;
-      setData(j);
+      const base = API_BASE.replace(/\/$/, "");
+      const fornasUrl = `${base}/api/drug-lookup?q=${encodeURIComponent(trimmed)}&limit=20`;
+      // Cross-doc mentions endpoint refuses queries under 3 chars; skip it
+      // in that case so the user still gets Fornas results on 2-char input.
+      const mentionsUrl =
+        trimmed.length >= 3
+          ? `${base}/api/drug-mentions?q=${encodeURIComponent(trimmed)}&limit=12`
+          : null;
+
+      const [fornasR, mentionsR] = await Promise.all([
+        fetch(fornasUrl, { signal: ac.signal }),
+        mentionsUrl ? fetch(mentionsUrl, { signal: ac.signal }) : Promise.resolve(null),
+      ]);
+      if (!fornasR.ok) throw new Error(`HTTP ${fornasR.status}`);
+      const fornasJson = (await fornasR.json()) as LookupResponse;
+      setData(fornasJson);
+      if (mentionsR && mentionsR.ok) {
+        setMentions((await mentionsR.json()) as MentionsResponse);
+      } else {
+        setMentions(null);
+      }
       setElapsed(Math.round(performance.now() - start));
     } catch (e) {
       if ((e as Error).name === "AbortError") return;
       setError((e as Error).message);
       setData(null);
+      setMentions(null);
     } finally {
       if (!ac.signal.aborted) setLoading(false);
     }
@@ -418,6 +466,224 @@ export function DrugLookup() {
         </>
       )}
 
+      {/* Cross-doc mentions — same drug name across PPK / PNPK / Pedoman.
+          Only rendered once the user has a non-empty query AND the
+          mentions fetch returned at least one hit. */}
+      {mentions && mentions.total_pages > 0 && (
+        <section style={{ marginTop: 36 }}>
+          <div
+            style={{
+              display: "flex",
+              alignItems: "baseline",
+              gap: 10,
+              marginBottom: 14,
+              flexWrap: "wrap",
+            }}
+          >
+            <h2
+              style={{
+                margin: 0,
+                fontFamily: "var(--font-display-stack, var(--font-body-stack))",
+                fontSize: 18,
+                fontWeight: 500,
+                color: "var(--ink)",
+                letterSpacing: "-0.01em",
+              }}
+            >
+              {t("obat.mentions.title")}
+            </h2>
+            <span
+              className="mono"
+              style={{
+                fontSize: 10.5,
+                color: "var(--ink-3)",
+                letterSpacing: "0.12em",
+                textTransform: "uppercase",
+              }}
+            >
+              · {mentions.total_pages} {t("obat.pages_label")} ·{" "}
+              {mentions.docs.length} {t("obat.mentions.docs_label")}
+            </span>
+          </div>
+
+          <p
+            style={{
+              margin: "0 0 14px",
+              fontSize: 12.5,
+              color: "var(--ink-3)",
+              lineHeight: 1.55,
+              maxWidth: "64ch",
+            }}
+          >
+            {t("obat.mentions.caption")}
+          </p>
+
+          {/* Per-doc aggregate chips — quick scan of which PPK/PNPK cover this drug. */}
+          <div
+            style={{
+              display: "flex",
+              flexWrap: "wrap",
+              gap: 8,
+              marginBottom: 14,
+            }}
+          >
+            {mentions.docs.slice(0, 8).map((doc) => (
+              <a
+                key={doc.doc_id}
+                href={`${API_BASE.replace(/\/$/, "")}/api/guideline/${doc.doc_id}.html`}
+                target="_blank"
+                rel="noopener noreferrer"
+                style={{
+                  padding: "5px 10px",
+                  background: "var(--paper-2)",
+                  border: "1px solid var(--rule)",
+                  borderRadius: 2,
+                  fontSize: 12,
+                  color: "var(--ink-2)",
+                  textDecoration: "none",
+                  fontFamily: "var(--font-body-stack)",
+                  display: "inline-flex",
+                  alignItems: "center",
+                  gap: 6,
+                }}
+                title={doc.title}
+              >
+                <span
+                  className="mono"
+                  style={{
+                    fontSize: 10.5,
+                    color: "var(--ink-3)",
+                    letterSpacing: "0.08em",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  {doc.source_type ?? ""}
+                  {doc.year ? ` · ${doc.year}` : ""}
+                </span>
+                <span style={{ color: "var(--ink)" }}>
+                  {truncateTitle(doc.title, 42)}
+                </span>
+                <span
+                  className="mono"
+                  style={{ fontSize: 10.5, color: "var(--ink-3)" }}
+                >
+                  {doc.hit_count}
+                </span>
+              </a>
+            ))}
+          </div>
+
+          <ul style={{ listStyle: "none", padding: 0, margin: 0 }}>
+            {mentions.results.map((r, i) => (
+              <li
+                key={`${r.doc_id}-${r.page}-${i}`}
+                style={{
+                  marginBottom: 10,
+                  padding: "12px 14px",
+                  background: "var(--paper)",
+                  border: "1px solid var(--rule)",
+                  borderRadius: 2,
+                }}
+              >
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "baseline",
+                    justifyContent: "space-between",
+                    gap: 12,
+                    marginBottom: 6,
+                    flexWrap: "wrap",
+                  }}
+                >
+                  <div
+                    style={{
+                      display: "flex",
+                      alignItems: "baseline",
+                      gap: 8,
+                      flexWrap: "wrap",
+                    }}
+                  >
+                    <span
+                      className="mono"
+                      style={{
+                        fontSize: 10.5,
+                        color: "var(--ink-3)",
+                        letterSpacing: "0.1em",
+                        textTransform: "uppercase",
+                      }}
+                    >
+                      {r.source_type ?? ""}
+                      {r.year ? ` · ${r.year}` : ""}
+                    </span>
+                    <span
+                      style={{
+                        fontSize: 13.5,
+                        color: "var(--ink)",
+                        fontWeight: 500,
+                      }}
+                    >
+                      {truncateTitle(r.title, 58)}
+                    </span>
+                    <span
+                      className="mono"
+                      style={{ fontSize: 10.5, color: "var(--ink-4)" }}
+                    >
+                      · {t("obat.page")} {r.page} · {r.hits} {r.hits === 1 ? t("obat.hit_1") : t("obat.hit_n")}
+                    </span>
+                  </div>
+                  <a
+                    href={`${API_BASE.replace(/\/$/, "")}/api/guideline/${r.doc_id}.html#halaman-${r.page}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mono"
+                    style={{
+                      fontSize: 11,
+                      color: "var(--teal, #2a7a7a)",
+                      letterSpacing: "0.08em",
+                      textTransform: "uppercase",
+                      textDecoration: "none",
+                      borderBottom: "1px solid var(--teal, #2a7a7a)",
+                    }}
+                  >
+                    {t("obat.mentions.open")} →
+                  </a>
+                </div>
+                <p
+                  style={{
+                    margin: 0,
+                    fontSize: 13,
+                    lineHeight: 1.6,
+                    color: "var(--ink-2)",
+                    whiteSpace: "pre-wrap",
+                    fontFamily: "var(--font-body-stack)",
+                  }}
+                >
+                  {highlightTerm(r.snippet, mentions.matched_query)}
+                </p>
+              </li>
+            ))}
+          </ul>
+
+          {mentions.total_pages > mentions.results.length && (
+            <div
+              className="mono"
+              style={{
+                marginTop: 6,
+                fontSize: 11,
+                color: "var(--ink-4)",
+                letterSpacing: "0.1em",
+                textTransform: "uppercase",
+              }}
+            >
+              {t("obat.truncated").replace(
+                "{n}",
+                String(mentions.total_pages - mentions.results.length),
+              )}
+            </div>
+          )}
+        </section>
+      )}
+
       {/* Footnote */}
       <div
         style={{
@@ -469,6 +735,11 @@ function Spinner() {
       }}
     />
   );
+}
+
+function truncateTitle(title: string, max: number): string {
+  if (title.length <= max) return title;
+  return title.slice(0, max - 1).trimEnd() + "…";
 }
 
 /**
