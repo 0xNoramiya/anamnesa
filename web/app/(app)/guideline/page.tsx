@@ -446,6 +446,24 @@ function DocumentDetail({
           >
             Tanya Anamnesa →
           </button>
+          <a
+            href={`${API_BASE.replace(/\/$/, "")}/api/guideline/${doc.doc_id}.html`}
+            target="_blank"
+            rel="noreferrer"
+            className="btn btn-ghost"
+            style={{ padding: "7px 12px", fontSize: 12, textDecoration: "none" }}
+            title="Buka versi HTML (ramah mobile, tanpa PDF)"
+          >
+            Baca di browser ↗
+          </a>
+          <a
+            href={`${API_BASE.replace(/\/$/, "")}/api/guideline/${doc.doc_id}.md`}
+            className="btn btn-ghost"
+            style={{ padding: "7px 12px", fontSize: 12, textDecoration: "none" }}
+            title="Unduh sebagai Markdown (bisa dibaca offline)"
+          >
+            Unduh .md
+          </a>
           <button
             type="button"
             onClick={onOpen}

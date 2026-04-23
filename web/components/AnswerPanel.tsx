@@ -30,7 +30,7 @@ export function AnswerPanel({ final, queryText, onOpenPdf }: Props) {
 
   if (!final) return null;
   if (final.refusal_reason) {
-    return <Refusal final={final} queryText={queryText} onOpenPdf={onOpenPdf} />;
+    return <Refusal final={final} onOpenPdf={onOpenPdf} />;
   }
 
   const citations = final.citations;
@@ -468,11 +468,9 @@ function truncate(s: string, n: number): string {
 
 function Refusal({
   final,
-  queryText,
   onOpenPdf,
 }: {
   final: FinalResponse;
-  queryText?: string;
   onOpenPdf?: (docId: string, page: number) => void;
 }) {
   const reason = final.refusal_reason!;
@@ -487,7 +485,8 @@ function Refusal({
       </div>
       {final.from_cache && <CacheBadge ageSeconds={final.cached_age_s ?? null} />}
 
-      <ExportActions final={final} queryText={queryText} />
+      {/* No ExportActions / star on refusals — nothing useful to copy,
+          download, or favourite when Anamnesa declined to answer. */}
 
       <div className="bg-oxblood/5 border border-oxblood/20 rounded-lg p-5">
         <p className="text-body-lg leading-relaxed text-ink">{msg}</p>

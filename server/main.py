@@ -31,7 +31,7 @@ import structlog
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, PlainTextResponse, Response
 from pydantic import BaseModel
 from sse_starlette.sse import EventSourceResponse
 from ulid import ULID
@@ -493,6 +493,196 @@ async def stream(query_id: str) -> EventSourceResponse:
 # ---------------------------------------------------------------------------
 # PDF passthrough
 # ---------------------------------------------------------------------------
+
+
+def _load_processed_chunks(rec) -> list[dict[str, Any]] | None:
+    """Read the per-document processed-chunk JSON from
+    catalog/processed/{source_type}/{doc_id}.json. Returns None if the
+    file isn't present (e.g. document indexed but not chunked yet)."""
+    p = Path("catalog/processed") / rec.source_type / f"{rec.doc_id}.json"
+    if not p.exists():
+        return None
+    try:
+        raw = json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        return None
+    if not isinstance(raw, list):
+        return None
+    # Defensive: keep only dicts with the required fields.
+    clean: list[dict[str, Any]] = []
+    for row in raw:
+        if not isinstance(row, dict):
+            continue
+        if "text" not in row or "page" not in row:
+            continue
+        clean.append(row)
+    # Stable sort: by page ascending, then by section_path for determinism.
+    clean.sort(key=lambda r: (int(r.get("page", 0) or 0), str(r.get("section_path", ""))))
+    return clean
+
+
+def _render_guideline_markdown(rec, chunks: list[dict[str, Any]]) -> str:
+    """Assemble a per-document Markdown. Sectioned by page so a
+    doctor can cross-reference the PDF; section_path shown as a
+    small header per chunk. Mobile-friendly, no dependencies."""
+    lines: list[str] = []
+    lines.append(f"# {rec.title}")
+    lines.append("")
+    lines.append(
+        f"**{rec.doc_id}** · {rec.source_type.replace('_', ' ').upper()} · {rec.year}"
+    )
+    if rec.authority:
+        lines.append(f"Penerbit: {rec.authority}")
+    if rec.kepmenkes_number:
+        lines.append(f"No. regulasi: {rec.kepmenkes_number}")
+    lines.append("")
+    lines.append(
+        "> Dokumen ini diindeks oleh Anamnesa dari arsip Kemenkes RI. "
+        "Basis hukum: UU 28/2014 Pasal 42 (public domain). "
+        "Hanya referensi — bukan alat diagnosis."
+    )
+    lines.append("")
+    lines.append(f"_Diekspor pada {datetime.now(UTC).isoformat()}_")
+    lines.append("")
+    lines.append("---")
+    lines.append("")
+
+    current_page: int | None = None
+    for c in chunks:
+        page = int(c.get("page", 0) or 0)
+        if page != current_page:
+            lines.append(f"## Halaman {page}" if page else "## Pendahuluan")
+            lines.append("")
+            current_page = page
+        slug = str(c.get("section_slug") or "").strip()
+        path = str(c.get("section_path") or "").strip()
+        if slug:
+            lines.append(f"### {slug}")
+            if path and path != slug:
+                lines.append(f"*{path}*")
+            lines.append("")
+        text = str(c.get("text") or "").strip()
+        if text:
+            lines.append(text)
+            lines.append("")
+    return "\n".join(lines)
+
+
+def _render_guideline_html(rec, chunks: list[dict[str, Any]]) -> str:
+    """Minimal self-contained HTML. No external fonts (works offline on
+    a Puskesmas connection) — uses system fonts and the civic palette
+    with CSS custom properties so it looks like the rest of Anamnesa."""
+    import html as html_lib
+
+    def esc(s: str) -> str:
+        return html_lib.escape(s, quote=True)
+
+    parts: list[str] = []
+    parts.append(f"""<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{esc(rec.title)} — Anamnesa</title>
+<style>
+  :root {{
+    --paper: #F7F3EC; --paper-2: #EFE8D9; --ink: #0F1B2D; --ink-2: #2A3B57;
+    --ink-3: #556784; --navy: #1E2F4D; --oxblood: #8B1E2D; --rule: #D9CFB8;
+    --mono: ui-monospace, "SF Mono", Menlo, monospace;
+  }}
+  * {{ box-sizing: border-box; }}
+  html, body {{ margin: 0; background: var(--paper); color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }}
+  body {{ padding: 24px 18px 64px; max-width: 780px; margin: 0 auto;
+    line-height: 1.65; font-size: 16px; -webkit-font-smoothing: antialiased; }}
+  header {{ border-bottom: 1px solid var(--rule); padding-bottom: 16px; margin-bottom: 24px; }}
+  h1 {{ font-size: 26px; margin: 0 0 8px; letter-spacing: -0.01em; line-height: 1.2; }}
+  .meta {{ color: var(--ink-3); font-family: var(--mono); font-size: 12.5px; }}
+  .legal {{ margin-top: 14px; padding: 10px 14px; border-left: 2px solid var(--oxblood);
+    background: var(--paper-2); font-size: 13px; color: var(--ink-2); }}
+  h2 {{ margin-top: 32px; padding-top: 14px; border-top: 1px dashed var(--rule);
+    font-size: 19px; color: var(--navy); font-family: var(--mono); letter-spacing: 0.04em; }}
+  h3 {{ margin-top: 22px; font-size: 15px; font-family: var(--mono);
+    color: var(--ink-2); letter-spacing: 0.02em; }}
+  .path {{ color: var(--ink-3); font-family: var(--mono); font-size: 11.5px; margin: -10px 0 10px; }}
+  p {{ margin: 0 0 14px; white-space: pre-wrap; word-wrap: break-word; }}
+  footer {{ margin-top: 48px; padding-top: 16px; border-top: 1px solid var(--rule);
+    color: var(--ink-3); font-size: 12px; text-align: center; }}
+  .backlink {{ display: inline-block; margin-bottom: 14px; font-family: var(--mono);
+    font-size: 12px; color: var(--navy); text-decoration: none; letter-spacing: 0.04em; }}
+  .backlink:hover {{ text-decoration: underline; }}
+  @media (prefers-color-scheme: dark) {{
+    :root {{ --paper: #0B1220; --paper-2: #121B2E; --ink: #E8E2D4;
+      --ink-2: #B8B0A0; --ink-3: #8A8372; --navy: #6A8AC4; --oxblood: #E0727E;
+      --rule: #26324A; }}
+  }}
+</style>
+</head>
+<body>
+<a class="backlink" href="/guideline">← Kembali ke pustaka</a>
+<header>
+<h1>{esc(rec.title)}</h1>
+<div class="meta">{esc(rec.doc_id)} · {esc(rec.source_type.replace('_', ' ').upper())} · {rec.year}
+{' · ' + esc(rec.authority) if rec.authority else ''}
+{' · ' + esc(rec.kepmenkes_number) if rec.kepmenkes_number else ''}</div>
+<div class="legal">Diindeks oleh Anamnesa dari arsip Kemenkes RI. Basis hukum: <strong>UU 28/2014 Pasal 42</strong> (public domain). Hanya referensi — bukan alat diagnosis.</div>
+</header>
+""")
+
+    current_page: int | None = None
+    for c in chunks:
+        page = int(c.get("page", 0) or 0)
+        if page != current_page:
+            parts.append(f'<h2>Halaman {page}</h2>' if page else '<h2>Pendahuluan</h2>')
+            current_page = page
+        slug = str(c.get("section_slug") or "").strip()
+        path = str(c.get("section_path") or "").strip()
+        if slug:
+            parts.append(f"<h3>{esc(slug)}</h3>")
+            if path and path != slug:
+                parts.append(f'<div class="path">{esc(path)}</div>')
+        text = str(c.get("text") or "").strip()
+        if text:
+            parts.append(f"<p>{esc(text)}</p>")
+
+    parts.append(
+        f'<footer>Diekspor dari anamnesa.kudaliar.id pada {datetime.now(UTC).isoformat()}</footer>'
+    )
+    parts.append("</body></html>")
+    return "".join(parts)
+
+
+@app.get("/api/guideline/{doc_id}.md", response_class=PlainTextResponse)
+async def guideline_markdown(doc_id: str) -> PlainTextResponse:
+    m: Manifest = app.state.manifest
+    rec = next((d for d in m.documents if d.doc_id == doc_id), None)
+    if rec is None:
+        raise HTTPException(404, f"unknown doc_id: {doc_id!r}")
+    chunks = _load_processed_chunks(rec)
+    if chunks is None:
+        raise HTTPException(404, f"no processed chunks for {doc_id!r}")
+    body = _render_guideline_markdown(rec, chunks)
+    return PlainTextResponse(
+        body,
+        media_type="text/markdown; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{doc_id}.md"'},
+    )
+
+
+@app.get("/api/guideline/{doc_id}.html", response_class=Response)
+async def guideline_html(doc_id: str) -> Response:
+    m: Manifest = app.state.manifest
+    rec = next((d for d in m.documents if d.doc_id == doc_id), None)
+    if rec is None:
+        raise HTTPException(404, f"unknown doc_id: {doc_id!r}")
+    chunks = _load_processed_chunks(rec)
+    if chunks is None:
+        raise HTTPException(404, f"no processed chunks for {doc_id!r}")
+    body = _render_guideline_html(rec, chunks)
+    return Response(
+        content=body,
+        media_type="text/html; charset=utf-8",
+    )
 
 
 @app.get("/api/pdf/{doc_id}")
