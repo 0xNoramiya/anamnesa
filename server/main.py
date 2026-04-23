@@ -861,25 +861,24 @@ def _clean_guideline_text(s: str) -> str:
     if not s:
         return s
     s = _fix_word_splice(s)
-    # Strip line-level noise first so trailing/leading-cap cleanup
-    # doesn't run on lines we'd drop anyway.
     out: list[str] = []
     for line in s.splitlines():
-        if _OCR_PAGE_FOOTER_RE.match(line):
-            continue
-        if _OCR_URL_FOOTER_RE.match(line):
-            continue
-        if _OCR_LONE_CAP_RE.match(line):
-            continue
-        # Trim dangling watermark letters from the ends. Loop in case
-        # two stacked on one line ("BAB I E M"); the ML regex means
-        # trailing/leading here = line-local.
+        # Trim dangling watermark letters first — pdfplumber sometimes
+        # leaves a line like "-25- N" where the footer is followed by
+        # a watermark letter; we need the trim to run before the
+        # footer drop-check sees the line.
         for _ in range(3):
             new_line = _OCR_TRAILING_CAP_RE.sub("", line)
             new_line = _OCR_LEADING_CAP_RE.sub("", new_line)
             if new_line == line:
                 break
             line = new_line
+        if _OCR_PAGE_FOOTER_RE.match(line):
+            continue
+        if _OCR_URL_FOOTER_RE.match(line):
+            continue
+        if _OCR_LONE_CAP_RE.match(line):
+            continue
         out.append(line)
     cleaned = "\n".join(out)
     cleaned = _OCR_MULTI_BLANK_RE.sub("\n\n", cleaned)
