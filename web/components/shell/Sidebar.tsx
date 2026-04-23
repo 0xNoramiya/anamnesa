@@ -19,6 +19,7 @@ interface NavItem {
 export const NAV_ITEMS: NavItem[] = [
   { id: "chat",      labelKey: "nav.chat",       subKey: "nav.chat.sub",       icon: "chat",   shortcut: "G C", href: "/chat" },
   { id: "pencarian", labelKey: "nav.search",     subKey: "nav.search.sub",     icon: "search", shortcut: "G P", href: "/pencarian" },
+  { id: "obat",      labelKey: "nav.obat",       subKey: "nav.obat.sub",       icon: "pill",   shortcut: "G O", href: "/obat" },
   { id: "guideline", labelKey: "nav.guideline",  subKey: "nav.guideline.sub",  icon: "book",   shortcut: "G G", href: "/guideline" },
   { id: "riwayat",   labelKey: "nav.history",    subKey: "nav.history.sub",    icon: "clock",  shortcut: "G R", href: "/riwayat" },
   { id: "favorit",   labelKey: "nav.favorites",  subKey: "nav.favorites.sub",  icon: "star",   shortcut: "G F", href: "/favorit" },

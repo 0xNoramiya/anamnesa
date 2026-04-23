@@ -354,6 +354,156 @@ async def fast_search(q: str, limit: int = 20) -> dict[str, Any]:
     }
 
 
+# ---------------------------------------------------------------------------
+# Drug lookup — pure text search over the Fornas (BPJS formulary) chunks.
+# No LLM, target <300ms. Fornas is page-chunked, so a single hit returns
+# the whole page as a snippet and a link to the guideline HTML anchor.
+# ---------------------------------------------------------------------------
+
+_DRUG_DOC_ID = "fornas-2023"
+_drug_chunks_cache: list[dict[str, Any]] | None = None
+
+
+def _load_drug_chunks() -> list[dict[str, Any]]:
+    global _drug_chunks_cache
+    if _drug_chunks_cache is not None:
+        return _drug_chunks_cache
+    p = Path("catalog/processed/fornas") / f"{_DRUG_DOC_ID}.json"
+    if not p.exists():
+        _drug_chunks_cache = []
+        return _drug_chunks_cache
+    try:
+        raw = json.loads(p.read_text(encoding="utf-8"))
+    except Exception:
+        _drug_chunks_cache = []
+        return _drug_chunks_cache
+    _drug_chunks_cache = raw if isinstance(raw, list) else []
+    return _drug_chunks_cache
+
+
+# Common EN → ID drug-name transliterations. Fornas uses the Indonesian
+# orthography ("parasetamol", "amoksisilin"), but doctors often type the
+# international spelling. Run the fallback only when the literal query
+# produces zero hits. Order matters — longer, more specific rules first.
+_DRUG_EN_TO_ID_SUBS: list[tuple[str, str]] = [
+    ("cipro", "sipro"),
+    ("cephal", "sefal"),
+    ("cefa", "sefa"),
+    ("cefo", "sefo"),
+    ("cefu", "sefu"),
+    ("cefi", "sefi"),
+    ("cef", "sef"),
+    ("ceph", "sef"),
+    ("chlor", "klor"),
+    ("erythro", "eritro"),
+    ("codei", "kodei"),
+    ("phen", "fen"),
+    ("ph", "f"),
+    ("cillin", "silin"),
+    ("cycline", "siklin"),
+    ("cetamol", "setamol"),
+    ("floxacin", "floksasin"),
+    ("mycin", "misin"),
+    ("icol", "ikol"),
+    ("thia", "tia"),
+    ("ck", "k"),
+    ("x", "ks"),
+]
+
+
+def _transliterate_en_to_id(s: str) -> str:
+    out = s.lower()
+    for old, new in _DRUG_EN_TO_ID_SUBS:
+        out = out.replace(old, new)
+    # Trailing "e" is an EN spelling artefact for many drug names
+    # (amlodipine, codeine, morphine); Fornas drops it.
+    if out.endswith("e") and len(out) > 3:
+        out = out[:-1]
+    return out
+
+
+def _drug_snippet(text: str, q_lower: str, window: int = 80) -> str:
+    """Extract the short window around the first hit. Keeps output compact
+    for list rendering; full page is still viewable via the anchor link."""
+    text_lower = text.lower()
+    idx = text_lower.find(q_lower)
+    if idx < 0:
+        return text[: window * 2].strip()
+    start = max(0, idx - window)
+    end = min(len(text), idx + len(q_lower) + window)
+    snippet = text[start:end].strip()
+    if start > 0:
+        snippet = "…" + snippet
+    if end < len(text):
+        snippet = snippet + "…"
+    return snippet
+
+
+@app.get("/api/drug-lookup")
+async def drug_lookup(q: str, limit: int = 15) -> dict[str, Any]:
+    """Pure text search over Fornas (BPJS formulary) page chunks.
+
+    Each Fornas page lists drug entries with their form, dose, and any
+    restrictions (peresepan maksimal, indikasi, catatan). Doctors want
+    to answer "is drug X covered by BPJS and what restrictions apply"
+    in one look — this endpoint returns matching pages with a short
+    contextual snippet, ordered by hit count per page.
+    """
+    q_clean = q.strip()
+    if len(q_clean) < 2:
+        raise HTTPException(400, "query must be at least 2 characters")
+    limit = max(1, min(int(limit), 50))
+
+    q_lower = q_clean.lower()
+    chunks = _load_drug_chunks()
+
+    def _search(qlow: str) -> list[dict[str, Any]]:
+        hits: list[dict[str, Any]] = []
+        for c in chunks:
+            text = str(c.get("text", ""))
+            n = text.lower().count(qlow)
+            if n == 0:
+                continue
+            page = int(c.get("page", 0) or 0)
+            hits.append({
+                "page": page,
+                "section_slug": c.get("section_slug", f"halaman-{page}"),
+                "hits": n,
+                "snippet": _drug_snippet(text, qlow),
+            })
+        return hits
+
+    results = _search(q_lower)
+    matched_query = q_clean
+    translit_used = False
+    if not results:
+        translit = _transliterate_en_to_id(q_lower)
+        if translit != q_lower:
+            translit_results = _search(translit)
+            if translit_results:
+                results = translit_results
+                matched_query = translit
+                translit_used = True
+
+    # Rank: most hits first, then page ascending as a stable tiebreaker.
+    results.sort(key=lambda r: (-r["hits"], r["page"]))
+    total_hits = sum(r["hits"] for r in results)
+    total_pages = len(results)
+    results = results[:limit]
+
+    return {
+        "query": q_clean,
+        "matched_query": matched_query,
+        "translit_used": translit_used,
+        "doc_id": _DRUG_DOC_ID,
+        "doc_title": "Formularium Nasional (Kepmenkes 2197/2023)",
+        "source_url": "https://farmalkes.kemkes.go.id/en/unduh/kepmenkes-2197-2023/",
+        "total_hits": total_hits,
+        "total_pages": total_pages,
+        "results": results,
+    }
+
+
 @app.post("/api/feedback", response_model=FeedbackResponse)
 async def post_feedback(req: FeedbackRequest) -> FeedbackResponse:
     if req.rating not in ("up", "down"):

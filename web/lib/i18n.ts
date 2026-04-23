@@ -151,6 +151,34 @@ const ID: Dict = {
 
   "streaming.eyebrow": "Drafter sedang menulis",
   "streaming.chars": "karakter",
+
+  // Nav — drug lookup
+  "nav.obat": "Obat",
+  "nav.obat.sub": "Cari di Fornas",
+
+  // TopBar — drug lookup
+  "topbar.obat.title": "Cari Obat",
+  "topbar.obat.sub": "Formularium Nasional · BPJS · tanpa LLM",
+
+  // Drug-lookup page
+  "obat.source": "Sumber: Formularium Nasional — Kepmenkes HK.01.07/2197/2023",
+  "obat.placeholder": "contoh: parasetamol, amoksisilin, metformin, amlodipin",
+  "obat.clear": "Bersihkan",
+  "obat.examples": "Contoh",
+  "obat.translit":
+    "Tidak ada hasil untuk \"{q}\". Anamnesa mencari ejaan Fornas: \"{t}\".",
+  "obat.pages_label": "halaman",
+  "obat.hits_label": "total kecocokan",
+  "obat.page": "Hal.",
+  "obat.hit_1": "kecocokan",
+  "obat.hit_n": "kecocokan",
+  "obat.open_in_doc": "Buka di Fornas",
+  "obat.empty.title": "\"{q}\" tidak ditemukan di Fornas 2023.",
+  "obat.empty.hint":
+    "Obat ini mungkin tidak termasuk dalam daftar BPJS, atau ejaannya berbeda. Coba nama generik.",
+  "obat.truncated": "+{n} halaman lagi — persempit pencarian untuk melihatnya.",
+  "obat.footnote":
+    "Fornas berisi daftar obat yang ditanggung BPJS Kesehatan beserta restriksi peresepan. Cantuman di sini bukan indikasi klinis — rujuk PPK / PNPK untuk indikasi dan dosis.",
 };
 
 const EN: Dict = {
@@ -278,6 +306,31 @@ const EN: Dict = {
 
   "streaming.eyebrow": "Drafter is writing",
   "streaming.chars": "chars",
+
+  "nav.obat": "Drug lookup",
+  "nav.obat.sub": "BPJS formulary",
+
+  "topbar.obat.title": "Drug lookup",
+  "topbar.obat.sub": "National formulary · BPJS · no LLM",
+
+  "obat.source": "Source: Formularium Nasional — Kepmenkes HK.01.07/2197/2023",
+  "obat.placeholder": "e.g. parasetamol, amoksisilin, metformin, amlodipin",
+  "obat.clear": "Clear",
+  "obat.examples": "Try",
+  "obat.translit":
+    "No hits for \"{q}\". Searched the Fornas spelling: \"{t}\".",
+  "obat.pages_label": "pages",
+  "obat.hits_label": "matches",
+  "obat.page": "Page",
+  "obat.hit_1": "match",
+  "obat.hit_n": "matches",
+  "obat.open_in_doc": "Open in Fornas",
+  "obat.empty.title": "\"{q}\" not found in Fornas 2023.",
+  "obat.empty.hint":
+    "The drug may not be on the BPJS formulary, or the spelling is different. Try the generic name.",
+  "obat.truncated": "+{n} more pages — narrow the search to see them.",
+  "obat.footnote":
+    "Fornas lists drugs covered by BPJS with prescribing restrictions. Listings here are not clinical indications — consult PPK / PNPK for indication and dose.",
 };
 
 const DICTS: Record<Lang, Dict> = { id: ID, en: EN };

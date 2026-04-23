@@ -343,6 +343,11 @@ html.dark {
   50% { opacity: 0; }
 }
 
+/* Drug-lookup spinner — same 0.7s linear cadence used across the app. */
+@keyframes anamnesa-spin {
+  to { transform: rotate(360deg); }
+}
+
 /* Landing page — mobile overrides. Grid helpers collapse to one column
    on narrow screens so the CTA band stacks cleanly. */
 @media (max-width: 720px) {

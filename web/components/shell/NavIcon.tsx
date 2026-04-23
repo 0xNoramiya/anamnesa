@@ -7,6 +7,7 @@ export type NavIconName =
   | "clock"
   | "star"
   | "trace"
+  | "pill"
   | "sun"
   | "moon"
   | "menu"
@@ -72,6 +73,13 @@ export function NavIcon({ name, size = 18, ...rest }: Props) {
           <circle cx="5" cy="18" r="2" />
           <circle cx="19" cy="12" r="2" />
           <path d="M7 6h6l4 5M7 18h6l4-5" />
+        </svg>
+      );
+    case "pill":
+      return (
+        <svg {...common}>
+          <rect x="3" y="9.5" width="18" height="7" rx="3.5" transform="rotate(-30 12 13)" />
+          <path d="M8.6 16.8L16.8 8.6" />
         </svg>
       );
     case "sun":
