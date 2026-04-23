@@ -22,7 +22,6 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-import re
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -793,113 +792,14 @@ def _load_processed_chunks(rec) -> list[dict[str, Any]] | None:
     return clean
 
 
-# PDF-extraction noise patterns. Kemenkes guideline PDFs carry a
-# vertical "KEMENTERIAN KESEHATAN" watermark; pdfplumber inlines each
-# watermark glyph as a single-letter line AND occasionally splices
-# watermark glyphs into the middle of words (e.g. "pasti" → "pastAi",
-# "kontribusi" → "kontEribusi"). We fix it at render time, leaving
-# the raw catalog chunks untouched.
-#
-# Critical constraint: many medical-dense tokens look like splices but
-# ARE the canonical form — "mmHg", "mEq", "kPa", "cGy", "NaCl",
-# "HBsAg", "HBeAg", "CrCl", gene names like "HOX11L2" and "BRAFV600E".
-# The alpha splice rule therefore only fires when (a) the containing
-# word is ≥6 chars AND (b) it has exactly one uppercase letter. That
-# loses a handful of short-word fixes ("khaIs", "daEn") but preserves
-# 1,400+ medical tokens the earlier blanket rule would destroy.
-# The digit-cap-digit rule was dropped entirely after catalog audit
-# showed 200 medical-code false positives vs 5 legitimate watermark
-# year fixes.
-_OCR_SPLICE_ALPHA_RE = re.compile(r"([a-z])([A-Z])([a-z])")
-_OCR_WORD_BOUND_RE = re.compile(r"[A-Za-z0-9]+")
-_OCR_PAGE_FOOTER_RE = re.compile(r"^\s*-\s*\d+\s*-\s*$")
-_OCR_URL_FOOTER_RE = re.compile(r"^\s*(?:www\.)?[a-z]+\.kemkes\.go\.id\s*$", re.I)
-_OCR_LONE_CAP_RE = re.compile(r"^\s*[A-Z]\s*$")
-_OCR_MULTI_BLANK_RE = re.compile(r"\n{3,}")
-# Trailing or leading watermark letters attached to a line: "BAB I E"
-# → "BAB I", "E Pada pasien" → "Pada pasien". Exclude I/V/X/L/C/D/M
-# so we don't eat roman numerals on legitimate section headers like
-# "BAB I" or "DERAJAT IV".
-_OCR_TRAILING_CAP_RE = re.compile(r" ([A-HJKN-UW-Z])$", re.M)
-_OCR_LEADING_CAP_RE = re.compile(r"^([A-HJKN-UW-Z]) ", re.M)
-
-
-def _fix_word_splice(s: str) -> str:
-    """Remove watermark-letter splices from Indonesian prose, skipping
-    medical abbreviations (mmHg, mEq, NaCl, HBsAg, BRAFV600E, etc.)
-    by requiring the containing ALPHABETIC word (no digits) to be
-    ≥6 chars AND have exactly one uppercase letter. Digits act as
-    boundaries so "140/90mmHg" sees "mmHg" (4 chars, below threshold)
-    rather than "90mmHg" (6 chars, over threshold)."""
-    def walk_word(start: int, end: int) -> tuple[int, int]:
-        ws = start
-        while ws > 0 and s[ws - 1].isalpha():
-            ws -= 1
-        we = end
-        while we < len(s) and s[we].isalpha():
-            we += 1
-        return ws, we
-
-    def sub(match: re.Match[str]) -> str:
-        ws, we = walk_word(match.start(), match.end())
-        word = s[ws:we]
-        cap_count = sum(1 for ch in word if ch.isupper())
-        if cap_count != 1 or len(word) < 6:
-            return match.group(0)
-        return match.group(1) + match.group(3)
-
-    return _OCR_SPLICE_ALPHA_RE.sub(sub, s)
-
-
-def _clean_guideline_text(s: str) -> str:
-    """Strip PDF-extraction noise from a single chunk's text.
-
-    See _OCR_*_RE docs above for the patterns this fixes. Returns the
-    cleaned text with trailing whitespace trimmed and runs of blank
-    lines collapsed.
-    """
-    if not s:
-        return s
-    s = _fix_word_splice(s)
-    out: list[str] = []
-    for line in s.splitlines():
-        # Trim dangling watermark letters first — pdfplumber sometimes
-        # leaves a line like "-25- N" where the footer is followed by
-        # a watermark letter; we need the trim to run before the
-        # footer drop-check sees the line.
-        for _ in range(3):
-            new_line = _OCR_TRAILING_CAP_RE.sub("", line)
-            new_line = _OCR_LEADING_CAP_RE.sub("", new_line)
-            if new_line == line:
-                break
-            line = new_line
-        if _OCR_PAGE_FOOTER_RE.match(line):
-            continue
-        if _OCR_URL_FOOTER_RE.match(line):
-            continue
-        if _OCR_LONE_CAP_RE.match(line):
-            continue
-        out.append(line)
-    cleaned = "\n".join(out)
-    cleaned = _OCR_MULTI_BLANK_RE.sub("\n\n", cleaned)
-    return cleaned.strip()
-
-
-def _beautify_slug(slug: str) -> str:
-    """Turn a system slug like 'latar-belakang' into a display heading
-    'Latar Belakang'. Returns '' for junk slugs (single letter, or
-    short all-lowercase-consonant fragments like 'gy' that come from
-    the same watermark-letter extraction bug) so the renderer can
-    skip emitting a header."""
-    s = slug.strip()
-    if not s:
-        return ""
-    # Skip single-letter / two-letter junk. Real sections in the
-    # catalog are always at least one hyphenated word (≥3 chars).
-    if len(s) <= 2 and "-" not in s and "_" not in s:
-        return ""
-    parts = re.split(r"[-_]", s)
-    return " ".join(p.capitalize() for p in parts if p)
+# Guideline text cleanup lives in core.text_cleanup so the same rules
+# apply to both human-facing HTML/Markdown and to retriever responses
+# the Drafter reads. Re-exported under the private names used through
+# the rest of this module.
+from core.text_cleanup import (
+    beautify_slug as _beautify_slug,
+    clean_guideline_text as _clean_guideline_text,
+)
 
 
 def _render_guideline_markdown(rec, chunks: list[dict[str, Any]]) -> str:

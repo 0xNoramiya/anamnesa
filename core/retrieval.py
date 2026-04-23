@@ -34,6 +34,8 @@ from typing import Any
 import structlog
 from rank_bm25 import BM25Okapi
 
+from core.text_cleanup import clean_guideline_text
+
 from core.chunk_store import LanceChunkStore
 from core.embeddings import Embedder
 from core.manifest import Manifest
@@ -71,6 +73,16 @@ def _tokenize(text: str) -> list[str]:
 def _chunk_key(c: Chunk) -> str:
     """Stable identity for fusion — must match row_key in chunk_store."""
     return f"{c.doc_id}::{c.page}::{c.section_slug}"
+
+
+def _clean_chunk(c: Chunk) -> Chunk:
+    """Return a copy of `c` with watermark/footer noise stripped from
+    its body text. Cheap pure function; run on every retrieval result
+    so the Drafter never sees raw PDF-extraction artifacts."""
+    cleaned = clean_guideline_text(c.text)
+    if cleaned == c.text:
+        return c
+    return c.model_copy(update={"text": cleaned})
 
 
 def _chunk_matches_filters(chunk: Chunk, filters: RetrievalFilters) -> bool:
@@ -253,7 +265,11 @@ class HybridRetriever:
             fused=len(fused),
             filters=filters.model_dump(exclude_none=True),
         )
-        return fused[:top_k]
+        # Strip PDF-extraction noise (watermark splices, page footers)
+        # so the Drafter reads clean Indonesian prose. Raw BM25/vector
+        # scores are preserved; only the text body changes. See
+        # core/text_cleanup for the rule set and safety constraints.
+        return [_clean_chunk(c) for c in fused[:top_k]]
 
     # -- supporting tools ------------------------------------------------
 
@@ -270,7 +286,7 @@ class HybridRetriever:
         if not matches:
             raise KeyError(f"no chunk for ({doc_id!r}, {section_path!r})")
         matches.sort(key=lambda c: c.page)
-        text = "\n\n".join(m.text for m in matches)
+        text = "\n\n".join(clean_guideline_text(m.text) for m in matches)
         return {
             "doc_id": doc_id,
             "section_path": section_path,
