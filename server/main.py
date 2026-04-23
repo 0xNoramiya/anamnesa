@@ -22,6 +22,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -792,6 +793,82 @@ def _load_processed_chunks(rec) -> list[dict[str, Any]] | None:
     return clean
 
 
+# PDF-extraction noise patterns. Kemenkes guideline PDFs carry a
+# vertical "KEMENTERIAN KESEHATAN" watermark; pdfplumber inlines each
+# watermark glyph as a single-letter line AND occasionally splices
+# watermark glyphs into the middle of words. Result: "pastAi" where
+# "pasti" was written, "201I6" where "2016" was written, "kontEribusi"
+# where "kontribusi" was written. Readers can't parse the text and
+# BM25 search misses tokens. We fix it at render time — keeping the
+# raw chunks untouched so a future re-extraction pipeline can replace
+# this heuristic with proper column-aware extraction.
+_OCR_SPLICE_ALPHA_RE = re.compile(r"([a-z])[A-Z]([a-z])")
+_OCR_SPLICE_DIGIT_RE = re.compile(r"(\d)[A-Z](\d)")
+_OCR_PAGE_FOOTER_RE = re.compile(r"^\s*-\s*\d+\s*-\s*$")
+_OCR_URL_FOOTER_RE = re.compile(r"^\s*(?:www\.)?[a-z]+\.kemkes\.go\.id\s*$", re.I)
+_OCR_LONE_CAP_RE = re.compile(r"^\s*[A-Z]\s*$")
+_OCR_MULTI_BLANK_RE = re.compile(r"\n{3,}")
+# Trailing or leading watermark letters attached to a line: "BAB I E"
+# → "BAB I", "S PENDAHULUAN" → "PENDAHULUAN". Exclude I/V/X/L/C/D/M
+# so we don't eat roman numerals on legitimate section headers like
+# "BAB I" or "DERAJAT IV".
+_OCR_TRAILING_CAP_RE = re.compile(r" ([A-HJKN-UW-Z])$", re.M)
+_OCR_LEADING_CAP_RE = re.compile(r"^([A-HJKN-UW-Z]) ", re.M)
+
+
+def _clean_guideline_text(s: str) -> str:
+    """Strip PDF-extraction noise from a single chunk's text.
+
+    See _OCR_*_RE docs above for the patterns this fixes. Returns the
+    cleaned text with trailing whitespace trimmed and runs of blank
+    lines collapsed.
+    """
+    if not s:
+        return s
+    s = _OCR_SPLICE_ALPHA_RE.sub(r"\1\2", s)
+    s = _OCR_SPLICE_DIGIT_RE.sub(r"\1\2", s)
+    # Strip line-level noise first so trailing/leading-cap cleanup
+    # doesn't run on lines we'd drop anyway.
+    out: list[str] = []
+    for line in s.splitlines():
+        if _OCR_PAGE_FOOTER_RE.match(line):
+            continue
+        if _OCR_URL_FOOTER_RE.match(line):
+            continue
+        if _OCR_LONE_CAP_RE.match(line):
+            continue
+        # Trim dangling watermark letters from the ends. Loop in case
+        # two stacked on one line ("BAB I E M"); the ML regex means
+        # trailing/leading here = line-local.
+        for _ in range(3):
+            new_line = _OCR_TRAILING_CAP_RE.sub("", line)
+            new_line = _OCR_LEADING_CAP_RE.sub("", new_line)
+            if new_line == line:
+                break
+            line = new_line
+        out.append(line)
+    cleaned = "\n".join(out)
+    cleaned = _OCR_MULTI_BLANK_RE.sub("\n\n", cleaned)
+    return cleaned.strip()
+
+
+def _beautify_slug(slug: str) -> str:
+    """Turn a system slug like 'latar-belakang' into a display heading
+    'Latar Belakang'. Returns '' for junk slugs (single letter, or
+    short all-lowercase-consonant fragments like 'gy' that come from
+    the same watermark-letter extraction bug) so the renderer can
+    skip emitting a header."""
+    s = slug.strip()
+    if not s:
+        return ""
+    # Skip single-letter / two-letter junk. Real sections in the
+    # catalog are always at least one hyphenated word (≥3 chars).
+    if len(s) <= 2 and "-" not in s and "_" not in s:
+        return ""
+    parts = re.split(r"[-_]", s)
+    return " ".join(p.capitalize() for p in parts if p)
+
+
 def _render_guideline_markdown(rec, chunks: list[dict[str, Any]]) -> str:
     """Assemble a per-document Markdown. Sectioned by page so a
     doctor can cross-reference the PDF; section_path shown as a
@@ -825,14 +902,15 @@ def _render_guideline_markdown(rec, chunks: list[dict[str, Any]]) -> str:
             lines.append(f"## Halaman {page}" if page else "## Pendahuluan")
             lines.append("")
             current_page = page
-        slug = str(c.get("section_slug") or "").strip()
+        slug_raw = str(c.get("section_slug") or "").strip()
         path = str(c.get("section_path") or "").strip()
-        if slug:
-            lines.append(f"### {slug}")
-            if path and path != slug:
+        slug_pretty = _beautify_slug(slug_raw)
+        if slug_pretty:
+            lines.append(f"### {slug_pretty}")
+            if path and path != slug_raw and path != slug_pretty:
                 lines.append(f"*{path}*")
             lines.append("")
-        text = str(c.get("text") or "").strip()
+        text = _clean_guideline_text(str(c.get("text") or ""))
         if text:
             lines.append(text)
             lines.append("")
@@ -981,17 +1059,29 @@ def _render_guideline_html(rec, chunks: list[dict[str, Any]]) -> str:
         parts.append(f'<div class="page-label">{page_label}</div>\n')
         # First chunk on this page: use its section_slug as the h2.
         first = page_chunks[0]
-        first_slug = str(first.get("section_slug") or "").strip()
-        if first_slug:
-            parts.append(f"<h2>{esc(first_slug)}</h2>\n")
+        first_slug_pretty = _beautify_slug(str(first.get("section_slug") or ""))
+        if first_slug_pretty:
+            parts.append(f"<h2>{esc(first_slug_pretty)}</h2>\n")
         for i, chunk in enumerate(page_chunks):
-            slug = str(chunk.get("section_slug") or "").strip()
+            slug_raw = str(chunk.get("section_slug") or "").strip()
+            slug_pretty = _beautify_slug(slug_raw)
             path = str(chunk.get("section_path") or "").strip()
-            text = str(chunk.get("text") or "").strip()
+            text = _clean_guideline_text(str(chunk.get("text") or ""))
             # Use h3 for subsequent section slugs within the same page.
-            if i > 0 and slug:
-                parts.append(f"<h3>{esc(slug)}</h3>\n")
-            if path and path != slug:
+            if i > 0 and slug_pretty:
+                parts.append(f"<h3>{esc(slug_pretty)}</h3>\n")
+            # Show the full hierarchical path only when it adds info
+            # beyond the heading we just rendered — avoids the ugly
+            # h3 "Latar Belakang" / path "bab_1/latar-belakang" dupe.
+            # Also skip when the slug itself was junk (single-letter
+            # watermark) since the path's last segment is the same junk.
+            if (
+                slug_pretty
+                and path
+                and path != slug_raw
+                and path.lower() != slug_pretty.lower()
+                and "/" in path
+            ):
                 parts.append(f'<div class="path">{esc(path)}</div>\n')
             if text:
                 parts.append(f"<p>{esc(text)}</p>\n")
