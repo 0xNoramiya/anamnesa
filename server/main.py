@@ -605,20 +605,6 @@ h1 { font-size: 26px; margin: 0 0 8px; letter-spacing: -0.01em; line-height: 1.2
   font-size: 12px; color: var(--navy); text-decoration: none; letter-spacing: 0.04em;
 }
 .backlink:hover { text-decoration: underline; }
-.toc {
-  margin: 18px 0 0; padding: 12px 14px; background: var(--paper-2);
-  border: 1px solid var(--rule); border-radius: 2px;
-}
-.toc-label {
-  font-family: var(--mono); font-size: 10.5px; color: var(--ink-3);
-  letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 6px;
-}
-.toc-links { display: flex; flex-wrap: wrap; gap: 4px 8px; font-family: var(--mono); font-size: 12px; }
-.toc-links a {
-  color: var(--navy); text-decoration: none;
-  padding: 2px 6px; border: 1px solid transparent; border-radius: 2px;
-}
-.toc-links a:hover { border-color: var(--rule); background: var(--paper); }
 .page {
   margin-top: 28px; padding-top: 14px; border-top: 1px dashed var(--rule);
   scroll-margin-top: 12px;
@@ -699,14 +685,6 @@ def _render_guideline_html(rec, chunks: list[dict[str, Any]]) -> str:
             f"<span>{esc(rec.kepmenkes_number)}</span>",
         ]
 
-    # TOC — chunk the page list into groups of ~20 to keep the
-    # display tidy on phones. Anchor to page ids below.
-    toc_links: list[str] = []
-    for page_num, _ in pages:
-        label = f"hal {page_num}" if page_num else "awal"
-        anchor = f"p{page_num}" if page_num else "p0"
-        toc_links.append(f'<a href="#{anchor}">{label}</a>')
-
     parts: list[str] = []
     parts.append("<!DOCTYPE html>\n<html lang=\"id\">\n<head>\n")
     parts.append('<meta charset="utf-8">\n')
@@ -723,11 +701,6 @@ def _render_guideline_html(rec, chunks: list[dict[str, Any]]) -> str:
         "Basis hukum: <strong>UU 28/2014 Pasal 42</strong> (public domain). "
         "Hanya referensi — bukan alat diagnosis.</div>\n"
     )
-    if toc_links:
-        parts.append('<nav class="toc" aria-label="Daftar halaman">\n')
-        parts.append(f'<div class="toc-label">Lompat ke halaman ({len(pages)})</div>\n')
-        parts.append(f'<div class="toc-links">{"".join(toc_links)}</div>\n')
-        parts.append("</nav>\n")
     parts.append("</header>\n")
 
     for page_num, page_chunks in pages:
