@@ -2,6 +2,15 @@
  * Tailwind is available but this layout touches enough viewport / sticky
  * edge cases that a standalone stylesheet is easier to audit. */
 
+/* Mobile (< 768px): body scrolls normally — no desktop sidebar, and
+ * iOS/Safari handle window scroll + fixed bottom tab bar best without
+ * an extra scroll container.
+ *
+ * Desktop (≥ 768px): shell-root fills the viewport exactly and
+ * shell-main becomes the scroll container, so the scrollbar sits
+ * next to the content column rather than at the far window edge.
+ * The sidebar sits beside shell-main and is naturally pinned because
+ * shell-root doesn't scroll. See @media block below for the switch. */
 .shell-root {
   display: flex;
   min-height: 100vh;
@@ -35,11 +44,26 @@
 }
 
 @media (min-width: 768px) {
+  .shell-root {
+    /* Pin the shell to the viewport so the scroll happens inside
+       shell-main, not on the document body. */
+    height: 100vh;
+    min-height: 0;
+    overflow: hidden;
+  }
   .shell-sidebar {
     display: block;
-    position: sticky;
-    top: 0;
-    height: 100vh;
+    height: 100vh;  /* fills the shell-root height */
+    flex-shrink: 0;
+  }
+  .shell-main {
+    /* Main column is the sole desktop scroll container. Stable
+       scrollbar gutter avoids layout shift when content length
+       crosses the viewport threshold. */
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-gutter: stable;
+    overscroll-behavior: contain;
   }
   .shell-main-inner {
     padding-bottom: 0;
