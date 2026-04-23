@@ -330,3 +330,11 @@ html.dark {
   .no-scrollbar::-webkit-scrollbar { display: none; }
   .no-scrollbar { scrollbar-width: none; }
 }
+
+/* Landing page — mobile overrides. Grid helpers collapse to one column
+   on narrow screens so the CTA band stacks cleanly. */
+@media (max-width: 720px) {
+  .landing-cta-grid {
+    grid-template-columns: 1fr !important;
+  }
+}
