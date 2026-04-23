@@ -327,11 +327,12 @@ export function ChatMode() {
         </section>
 
         {/* Trace sidebar: desktop shows it inline; mobile hides it
-            (users can switch to /agent-track to inspect). */}
+            (users can switch to /agent-track to inspect). Sticky
+            offset clears the 64px TopBar + 12px breathing room. */}
         <section
           className="hidden lg:block lg:col-span-4
-                     lg:sticky lg:top-6 lg:self-start
-                     lg:max-h-[calc(100vh-2rem)]"
+                     lg:sticky lg:top-[76px] lg:self-start
+                     lg:max-h-[calc(100vh-96px)]"
         >
           <TraceSidebar events={stream.events} status={stream.status} />
         </section>

@@ -15,7 +15,15 @@ export function TopBar({ title, subtitle, children }: Props) {
         gap: 16,
         padding: "14px 24px",
         borderBottom: "1px solid var(--rule)",
-        background: "var(--paper)",
+        // Semi-opaque so long-form content scrolls *behind* the bar
+        // without the headline text jumping out against the scrolled
+        // prose. Matches landing/doc-page header treatment.
+        background: "color-mix(in oklch, var(--paper) 92%, transparent)",
+        backdropFilter: "blur(8px)",
+        WebkitBackdropFilter: "blur(8px)",
+        position: "sticky",
+        top: 0,
+        zIndex: 5,
         flexShrink: 0,
         minHeight: 64,
       }}
