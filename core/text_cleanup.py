@@ -108,15 +108,57 @@ def clean_guideline_text(s: str) -> str:
     return cleaned.strip()
 
 
+_ROMAN_NUMERALS = frozenset({"i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x", "xi", "xii"})
+_VOWELS = frozenset("aeiou")
+# 3-4 character medical acronyms with vowels that'd otherwise fall
+# through the all-consonant rule. Kept intentionally small — adding
+# too many risks false-positives against legitimate Indonesian words
+# ("anak", "obat"). Only well-known, unambiguous medical abbreviations.
+_MEDICAL_ACRONYMS = frozenset({
+    "hiv", "aids", "tbc", "icu", "igd", "oat", "ppi", "nsaid", "ppk",
+    "ppok", "dbd", "dss", "ska", "stemi", "nstemi",
+})
+
+
+def _beautify_segment(seg: str) -> str:
+    """Title-case a single slug segment, upper-casing short acronyms
+    (all-consonant 2-5 char tokens: DBD, TB, PGK, VHC), roman
+    numerals (II, III, IV), and a short list of well-known medical
+    acronyms that happen to contain vowels (HIV, ICU, IGD, OAT).
+    Indonesian words — which almost always contain vowels — stay as
+    Title Case."""
+    s = seg.strip()
+    if not s:
+        return ""
+    lo = s.lower()
+    if lo in _ROMAN_NUMERALS:
+        return lo.upper()
+    if lo in _MEDICAL_ACRONYMS:
+        return lo.upper()
+    if 2 <= len(lo) <= 5 and lo.isalpha() and not any(ch in _VOWELS for ch in lo):
+        return lo.upper()
+    return s.capitalize()
+
+
 def beautify_slug(slug: str) -> str:
     """Turn a system slug 'latar-belakang' into 'Latar Belakang'.
     Returns '' for junk slugs (single letter, or short fragments from
     the same watermark-letter extraction bug) so the renderer can
-    skip emitting a header."""
+    skip emitting a header.
+
+    Short acronyms and roman numerals inside the slug are upper-cased
+    rather than title-cased, so "dbd-anak" renders as "DBD Anak" and
+    "derajat-iv" as "Derajat IV"."""
     s = slug.strip()
     if not s:
         return ""
+    lo = s.lower()
+    # Standalone roman numerals (≤2 chars: "i", "v", "x") would
+    # otherwise be caught by the junk-filter below. Whitelist them so
+    # a slug like "ii" renders as "II", not empty.
+    if lo in _ROMAN_NUMERALS:
+        return lo.upper()
     if len(s) <= 2 and "-" not in s and "_" not in s:
         return ""
     parts = re.split(r"[-_]", s)
-    return " ".join(p.capitalize() for p in parts if p)
+    return " ".join(_beautify_segment(p) for p in parts if p)
