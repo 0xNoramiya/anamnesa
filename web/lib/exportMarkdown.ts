@@ -150,3 +150,71 @@ export function suggestedFilename(): string {
   const stamp = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}`;
   return `anamnesa-${stamp}.md`;
 }
+
+/**
+ * Build a plain-text share string tuned for WhatsApp / Telegram, where
+ * heavy Markdown falls apart visually. Strips headings, fence markers,
+ * and citation-key brackets; replaces inline [[key]] with "[N]" to
+ * match the numbered Referensi list. Truncates body + quotes so the
+ * share payload stays inside typical message-size comfort (~2-3 KB).
+ *
+ * Leaves *bold* and _italic_ alone — WhatsApp / Telegram render those.
+ */
+export function buildShareText(query: string, final: FinalResponse): string {
+  const lines: string[] = [];
+  lines.push(`*Pedoman:* ${query.trim()}`);
+  lines.push("");
+
+  if (final.refusal_reason) {
+    const msg = REFUSAL_MESSAGES_ID[final.refusal_reason] ?? final.answer_markdown;
+    lines.push(msg.trim());
+    lines.push("");
+    lines.push(`_Alasan: ${final.refusal_reason}_`);
+    lines.push("");
+  } else {
+    const indexByKey = new Map<string, number>();
+    final.citations.forEach((c, i) => indexByKey.set(c.key, i + 1));
+
+    let body = final.answer_markdown
+      .replace(/\[\[([^\]]+)\]\]/g, (_full, key: string) => {
+        const n = indexByKey.get(key);
+        return n ? `[${n}]` : "";
+      })
+      // Strip markdown headings, keep the text.
+      .replace(/^#{1,6}\s+/gm, "")
+      // Collapse sequences of blank lines.
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+
+    if (body.length > 1600) {
+      body = body.slice(0, 1600).replace(/\s+\S*$/, "") + "…";
+    }
+    lines.push(body);
+    lines.push("");
+
+    if (final.citations.length > 0) {
+      lines.push("*Referensi:*");
+      final.citations.slice(0, 5).forEach((c, i) => {
+        lines.push(`[${i + 1}] ${c.doc_id} · hal ${c.page}`);
+      });
+      if (final.citations.length > 5) {
+        lines.push(`…+${final.citations.length - 5} sitasi lain`);
+      }
+      lines.push("");
+    }
+  }
+
+  lines.push("—");
+  lines.push("Dari Anamnesa · pencarian pedoman klinis Indonesia");
+  lines.push("https://anamnesa.kudaliar.id");
+  return lines.join("\n");
+}
+
+/**
+ * Construct a wa.me deep link that opens WhatsApp with the share text
+ * pre-filled. Falls back to Web WhatsApp on desktop when the native app
+ * isn't installed.
+ */
+export function whatsappShareUrl(text: string): string {
+  return `https://wa.me/?text=${encodeURIComponent(text)}`;
+}

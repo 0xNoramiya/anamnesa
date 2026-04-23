@@ -10,8 +10,10 @@ import type {
 import { REFUSAL_MESSAGES_ID } from "@/lib/refusalMessages";
 import {
   buildAnswerMarkdown,
+  buildShareText,
   downloadText,
   suggestedFilename,
+  whatsappShareUrl,
 } from "@/lib/exportMarkdown";
 import { useFavorites } from "@/lib/useFavorites";
 import { FeedbackBar } from "./FeedbackBar";
@@ -619,6 +621,12 @@ function ExportActions({
     downloadText(suggestedFilename(), buildMd());
   };
 
+  const handleShareWhatsApp = () => {
+    const text = buildShareText(queryText ?? "", final);
+    const url = whatsappShareUrl(text);
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
   const handleStar = () => {
     // Only stars when we have a query text — stars-without-query can't
     // be replayed meaningfully from Favorit.
@@ -657,6 +665,21 @@ function ExportActions({
           <path d="M5 21h14" />
         </svg>
         Unduh .md
+      </button>
+      <button
+        type="button"
+        onClick={handleShareWhatsApp}
+        className="inline-flex items-center gap-1.5 text-caption font-mono
+                   uppercase tracking-editorial text-ink-mid hover:text-civic
+                   hover:bg-paper-deep px-2.5 py-1.5 rounded-md transition-colors"
+        title="Bagikan ringkasan via WhatsApp"
+      >
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none"
+             stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M7.9 20A9 9 0 1 0 4 16.1L3 21l4.9-1Z" />
+          <path d="M8.5 11.5a4 4 0 0 0 4 4" />
+        </svg>
+        Bagikan
       </button>
       <button
         type="button"
