@@ -22,6 +22,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
@@ -887,6 +888,38 @@ h1 { font-size: 26px; margin: 0 0 8px; letter-spacing: -0.01em; line-height: 1.2
   font-size: 12px; color: var(--navy); text-decoration: none; letter-spacing: 0.04em;
 }
 .backlink:hover { text-decoration: underline; }
+.toc {
+  margin: 18px 0 8px; padding: 14px 16px; border: 1px solid var(--rule);
+  background: var(--paper-2); border-radius: 2px;
+}
+.toc-label {
+  font-family: var(--mono); font-size: 11px; color: var(--ink-3);
+  letter-spacing: 0.14em; text-transform: uppercase; margin: 0 0 8px;
+}
+.toc details { margin: 4px 0; }
+.toc summary {
+  cursor: pointer; list-style: none; padding: 6px 4px;
+  font-size: 13.5px; color: var(--ink); font-weight: 500;
+  border-left: 2px solid var(--navy); padding-left: 10px;
+}
+.toc summary::-webkit-details-marker { display: none; }
+.toc summary::before {
+  content: "▸"; display: inline-block; width: 14px;
+  color: var(--ink-3); transition: transform 0.1s;
+}
+.toc details[open] summary::before { content: "▾"; }
+.toc ul { list-style: none; padding: 4px 0 4px 28px; margin: 0; }
+.toc li { margin: 2px 0; }
+.toc a {
+  display: block; padding: 3px 6px; font-size: 12.5px;
+  color: var(--ink-2); text-decoration: none;
+  border-radius: 2px;
+}
+.toc a:hover { background: var(--paper); color: var(--navy); }
+.toc-page {
+  font-family: var(--mono); font-size: 10.5px; color: var(--ink-3);
+  margin-left: 6px;
+}
 .page {
   margin-top: 28px; padding-top: 14px; border-top: 1px dashed var(--rule);
   scroll-margin-top: 12px;
@@ -925,6 +958,66 @@ footer {
   }
 }
 """.strip()
+
+
+def _build_toc(chunks: list[dict[str, Any]]) -> list[tuple[str, list[tuple[str, int]]]]:
+    """Group (chapter, section_slug, first_page) tuples for TOC rendering.
+
+    Returns [(chapter_title, [(section_title, first_page), ...]), ...].
+    Chapter = first segment of section_path (e.g. "bab_1", "bab_iii").
+    Sections with page-suffixed slugs like "diagnosis-p11" collapse
+    back to their parent by stripping the /p{N} tail — so a 20-page
+    "diagnosis" section gets one TOC entry, not 20.
+    """
+    seen: set[tuple[str, str]] = set()
+    order: list[tuple[str, str, int]] = []  # (chapter, section, first_page)
+    for c in chunks:
+        path = str(c.get("section_path") or "").strip()
+        if not path or "/" not in path:
+            continue
+        page = int(c.get("page", 0) or 0)
+        segments = path.split("/")
+        chapter = segments[0]
+        # Use the second path segment (the "real" section), not the
+        # leaf page-slug variants like "diagnosis/p11".
+        section_raw = segments[1] if len(segments) > 1 else ""
+        if not section_raw or section_raw == chapter:
+            continue
+        # Strip page-suffix from slugs that were split per-page.
+        section = re.sub(r"-?p\d+$", "", section_raw)
+        if (chapter, section) in seen:
+            continue
+        seen.add((chapter, section))
+        order.append((chapter, section, page))
+
+    # Group by chapter, preserving first-seen order within each group.
+    # Junk sections (empty after beautify — single-letter watermark
+    # slugs like "e") are skipped entirely.
+    groups: dict[str, list[tuple[str, int]]] = {}
+    chapter_order: list[str] = []
+    for chapter, section, page in order:
+        title = _beautify_slug(section)
+        if not title:
+            continue
+        if chapter not in groups:
+            groups[chapter] = []
+            chapter_order.append(chapter)
+        groups[chapter].append((title, page))
+
+    result: list[tuple[str, list[tuple[str, int]]]] = []
+    for chapter in chapter_order:
+        chapter_title = _beautify_slug(chapter) or chapter.replace("-", " ").replace("_", " ")
+        # "Bab_1" and "Bab I" both want to read as "Bab 1" / "Bab I" —
+        # beautify already title-cases, so just uppercase the roman/arabic
+        # number tail for readability.
+        chapter_title = re.sub(
+            r"\b(Bab|Lampiran)\s+([a-z0-9ivx]+)\b",
+            lambda m: f"{m.group(1)} {m.group(2).upper()}",
+            chapter_title,
+            flags=re.I,
+        )
+        result.append((chapter_title, groups[chapter]))
+    return result
 
 
 def _render_guideline_html(rec, chunks: list[dict[str, Any]]) -> str:
@@ -984,6 +1077,29 @@ def _render_guideline_html(rec, chunks: list[dict[str, Any]]) -> str:
         "Hanya referensi — bukan alat diagnosis.</div>\n"
     )
     parts.append("</header>\n")
+
+    # Table of contents — rendered only when the doc has enough
+    # section structure to be worth navigating (≥2 chapter groups or
+    # ≥5 sections total). First chapter stays expanded by default.
+    toc_groups = _build_toc(chunks)
+    total_sections = sum(len(g[1]) for g in toc_groups)
+    if len(toc_groups) >= 2 or total_sections >= 5:
+        parts.append('<nav class="toc" aria-label="Daftar isi">\n')
+        parts.append('<div class="toc-label">Daftar Isi</div>\n')
+        for i, (chapter, sections) in enumerate(toc_groups):
+            open_attr = " open" if i == 0 else ""
+            parts.append(f"<details{open_attr}>\n")
+            parts.append(f"<summary>{esc(chapter)}</summary>\n")
+            parts.append("<ul>\n")
+            for title, page in sections:
+                anchor = f"p{page}" if page else "p0"
+                parts.append(
+                    f'<li><a href="#{anchor}">{esc(title)}'
+                    f'<span class="toc-page">hal. {page}</span></a></li>\n'
+                )
+            parts.append("</ul>\n")
+            parts.append("</details>\n")
+        parts.append("</nav>\n")
 
     for page_num, page_chunks in pages:
         anchor = f"p{page_num}" if page_num else "p0"
