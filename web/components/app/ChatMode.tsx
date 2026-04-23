@@ -106,6 +106,10 @@ export function ChatMode() {
   // localStorage load completes — otherwise the initial empty `[]`
   // would write through and clear the saved thread.
   const hydratedRef = useRef(false);
+  // True only when the thread was rehydrated from localStorage on
+  // mount. Drives the "melanjutkan percakapan" banner; auto-clears
+  // once the user submits another turn or hits reset.
+  const [restoredFromSession, setRestoredFromSession] = useState(false);
 
   const openPdf = useCallback(
     (docId: string, page: number) => setPdf({ docId, page }),
@@ -137,6 +141,8 @@ export function ChatMode() {
     if (q) {
       history.addEntry(q, fin);
       setThread((prev) => [...prev, { query: q, final: fin }]);
+      // User is actively engaging again — banner has served its purpose.
+      setRestoredFromSession(false);
     }
   }, [stream.final, history]);
 
@@ -158,6 +164,7 @@ export function ChatMode() {
     stream.reset();
     currentQueryRef.current = "";
     savedFinalRef.current = null;
+    setRestoredFromSession(false);
     try {
       window.localStorage.removeItem(THREAD_STORAGE_KEY);
     } catch {
@@ -195,6 +202,7 @@ export function ChatMode() {
         currentQueryRef.current = last.query;
         savedFinalRef.current = last.final;
         setThread(persisted);
+        setRestoredFromSession(true);
       }
     } catch {
       // soft-fail
@@ -218,6 +226,18 @@ export function ChatMode() {
     <div className="mx-auto max-w-[1440px] px-4 md:px-6 lg:px-10 py-4 md:py-8">
       <div className="grid grid-cols-12 gap-4 md:gap-6 pb-10">
         <section className="col-span-12 lg:col-span-8 min-w-0">
+          {/* Restored-session banner — the persistence feature is a quiet
+              localStorage restore, so we surface a subtle indicator so
+              users recognise they're resuming an earlier thread rather
+              than seeing stale content in an unexpected place. */}
+          {restoredFromSession && hasThread && (
+            <RestoredBanner
+              turnCount={thread.length}
+              onDismiss={() => setRestoredFromSession(false)}
+              onReset={resetConversation}
+              disabled={inFlight}
+            />
+          )}
           {/* Thread header — only visible once a conversation is underway. */}
           {hasThread && (
             <div
@@ -342,6 +362,95 @@ export function ChatMode() {
         page={pdf?.page ?? 1}
         onClose={closePdf}
       />
+    </div>
+  );
+}
+
+/** Subtle banner shown above the thread when the conversation was
+ *  restored from localStorage on page load. Auto-dismisses when the
+ *  user submits a new turn (via the stream.final effect in ChatMode)
+ *  or clicks the close button. */
+function RestoredBanner({
+  turnCount,
+  onDismiss,
+  onReset,
+  disabled,
+}: {
+  turnCount: number;
+  onDismiss: () => void;
+  onReset: () => void;
+  disabled: boolean;
+}) {
+  return (
+    <div
+      style={{
+        marginBottom: 18,
+        padding: "10px 14px",
+        background: "var(--paper-2)",
+        border: "1px solid var(--rule)",
+        borderLeft: "2px solid var(--navy, #1a2550)",
+        borderRadius: 2,
+        display: "flex",
+        alignItems: "center",
+        gap: 12,
+        flexWrap: "wrap",
+      }}
+      role="status"
+    >
+      <span
+        className="mono"
+        style={{
+          fontSize: 10.5,
+          color: "var(--ink-3)",
+          letterSpacing: "0.12em",
+          textTransform: "uppercase",
+        }}
+      >
+        Dilanjutkan
+      </span>
+      <span style={{ fontSize: 13, color: "var(--ink-2)", flex: 1, minWidth: 200 }}>
+        Percakapan {turnCount} giliran dari sesi sebelumnya — ajukan pertanyaan lanjutan di bawah atau mulai baru.
+      </span>
+      <div style={{ display: "flex", gap: 6 }}>
+        <button
+          type="button"
+          onClick={onReset}
+          disabled={disabled}
+          className="mono"
+          style={{
+            fontSize: 10.5,
+            color: "var(--ink-2)",
+            letterSpacing: "0.08em",
+            textTransform: "uppercase",
+            border: "1px solid var(--rule)",
+            background: "var(--paper)",
+            padding: "4px 9px",
+            borderRadius: 2,
+            cursor: disabled ? "not-allowed" : "pointer",
+            opacity: disabled ? 0.5 : 1,
+          }}
+        >
+          Mulai baru
+        </button>
+        <button
+          type="button"
+          onClick={onDismiss}
+          aria-label="Tutup"
+          className="mono"
+          style={{
+            fontSize: 14,
+            color: "var(--ink-3)",
+            border: "1px solid var(--rule)",
+            background: "var(--paper)",
+            padding: "2px 9px",
+            borderRadius: 2,
+            cursor: "pointer",
+            lineHeight: 1,
+          }}
+        >
+          ×
+        </button>
+      </div>
     </div>
   );
 }
