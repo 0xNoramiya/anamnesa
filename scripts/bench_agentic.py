@@ -44,18 +44,18 @@ class Config:
 
 CONFIGS = [
     Config(
-        label="fast-v2 (Opus high / Opus high)",
+        label="baseline (Opus high / Opus high)",
         drafter_model="claude-opus-4-7",
         drafter_effort="high",
         verifier_model="claude-opus-4-7",
         verifier_effort="high",
     ),
     Config(
-        label="fast-v3 (Opus high / Opus medium)",
+        label="haiku-verifier (Opus high / Haiku 4.5)",
         drafter_model="claude-opus-4-7",
         drafter_effort="high",
-        verifier_model="claude-opus-4-7",
-        verifier_effort="medium",
+        verifier_model="claude-haiku-4-5-20251001",
+        verifier_effort="high",
     ),
 ]
 
@@ -81,6 +81,9 @@ async def run_one(cfg: Config) -> dict:
             api_key=api_key,
             retriever=retriever,
             effort=cfg.verifier_effort,
+            # Haiku 4.5 doesn't support adaptive thinking; pass budget=0
+            # to skip the `thinking` kwarg. Opus keeps the default.
+            thinking_budget=0 if "haiku" in cfg.verifier_model else 12000,
         ),
         limits=BudgetLimits.from_env(),
     )

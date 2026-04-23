@@ -104,10 +104,16 @@ async def _lifespan(app: FastAPI):
             effort=os.getenv("ANAMNESA_DRAFTER_EFFORT", "xhigh"),
         ),
         verifier=OpusVerifier(
-            model_id=os.getenv("ANAMNESA_MODEL_VERIFIER", "claude-opus-4-7"),
+            model_id=(verifier_model := os.getenv("ANAMNESA_MODEL_VERIFIER", "claude-opus-4-7")),
             api_key=api_key,
             retriever=retriever,
-            thinking_budget=int(os.getenv("ANAMNESA_VERIFIER_THINKING_BUDGET", 12000)),
+            # Haiku 4.5 doesn't support adaptive thinking — auto-zero the
+            # budget when the env points at Haiku so ops can swap models
+            # with a single env change.
+            thinking_budget=(
+                0 if "haiku" in verifier_model
+                else int(os.getenv("ANAMNESA_VERIFIER_THINKING_BUDGET", 12000))
+            ),
             effort=os.getenv("ANAMNESA_VERIFIER_EFFORT", "xhigh"),
         ),
         limits=BudgetLimits.from_env(),
