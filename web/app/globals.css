@@ -354,4 +354,13 @@ html.dark {
   .landing-cta-grid {
     grid-template-columns: 1fr !important;
   }
+  /* Doc pages: hide inline nav on narrow screens so header fits; links
+     still reachable via footer. */
+  .doc-navlink {
+    display: none !important;
+  }
+}
+
+.doc-navlink:hover {
+  color: var(--navy);
 }

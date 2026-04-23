@@ -21,7 +21,6 @@ export function Landing() {
       <LandingHero />
       <LandingFeatures />
       <LandingDemo />
-      <LandingLegal />
       <LandingCTA />
       <LandingFooter />
     </div>
@@ -48,6 +47,9 @@ function LandingHeader() {
     >
       <Wordmark size={15} />
       <div style={{ flex: 1 }} />
+      <HeaderNavLink href="/legal" label={t("docs.nav.legal")} />
+      <HeaderNavLink href="/mcp" label={t("docs.nav.mcp")} />
+      <HeaderNavLink href="/api" label={t("docs.nav.api")} />
       <LangSwitch lang={lang} onChange={setLang} />
       <Link
         href="/chat"
@@ -57,6 +59,25 @@ function LandingHeader() {
         {t("landing.cta.open")}
       </Link>
     </div>
+  );
+}
+
+function HeaderNavLink({ href, label }: { href: string; label: string }) {
+  return (
+    <Link
+      href={href}
+      className="mono doc-navlink"
+      style={{
+        fontSize: 11,
+        color: "var(--ink-2)",
+        textDecoration: "none",
+        letterSpacing: "0.08em",
+        textTransform: "uppercase",
+        padding: "4px 8px",
+      }}
+    >
+      {label}
+    </Link>
   );
 }
 
@@ -529,49 +550,6 @@ function MiniRef({ n, doc, page }: { n: number; doc: string; page: string }) {
   );
 }
 
-function LandingLegal() {
-  const { t } = useI18n();
-  return (
-    <section
-      style={{
-        padding: "clamp(32px, 5vw, 56px) clamp(20px, 5vw, 56px)",
-        maxWidth: 1200,
-        margin: "0 auto",
-        borderTop: "1px solid var(--rule)",
-      }}
-    >
-      <div
-        style={{
-          padding: "18px 22px",
-          borderLeft: "2px solid var(--oxblood)",
-          background: "var(--paper-2)",
-          maxWidth: 780,
-        }}
-      >
-        <div
-          className="mono"
-          style={{
-            fontSize: 10.5,
-            color: "var(--oxblood)",
-            letterSpacing: "0.12em",
-            marginBottom: 6,
-          }}
-        >
-          {t("landing.legal.eyebrow")}
-        </div>
-        <p
-          style={{
-            fontSize: 14,
-            color: "var(--ink-2)",
-            lineHeight: 1.6,
-            margin: 0,
-          }}
-          dangerouslySetInnerHTML={{ __html: t("landing.legal.body_html") }}
-        />
-      </div>
-    </section>
-  );
-}
 
 function LandingCTA() {
   const { t } = useI18n();
@@ -676,7 +654,7 @@ function LandingFooter() {
           flexWrap: "wrap",
         }}
       >
-        <div style={{ maxWidth: 480 }}>
+        <div style={{ maxWidth: 520 }}>
           <Wordmark size={15} />
           <p
             style={{
@@ -687,6 +665,11 @@ function LandingFooter() {
             }}
             dangerouslySetInnerHTML={{ __html: t("landing.footer.disclaimer") }}
           />
+          <div style={{ marginTop: 14, display: "flex", gap: 14, flexWrap: "wrap" }}>
+            <FooterLink href="/legal" label={t("docs.nav.legal")} />
+            <FooterLink href="/mcp" label={t("docs.nav.mcp")} />
+            <FooterLink href="/api" label={t("docs.nav.api")} />
+          </div>
         </div>
         <div
           className="mono"
@@ -703,5 +686,23 @@ function LandingFooter() {
         </div>
       </div>
     </footer>
+  );
+}
+
+function FooterLink({ href, label }: { href: string; label: string }) {
+  return (
+    <Link
+      href={href}
+      className="mono"
+      style={{
+        fontSize: 11,
+        color: "var(--ink-2)",
+        textDecoration: "none",
+        letterSpacing: "0.08em",
+        textTransform: "uppercase",
+      }}
+    >
+      {label} →
+    </Link>
   );
 }
