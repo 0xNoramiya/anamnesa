@@ -1,29 +1,17 @@
 # Anamnesa
 
-**Indonesian clinical-guideline retrieval agent.** Answers Bahasa Indonesia clinical questions with grounded citations to the public-domain Kemenkes corpus (PPK FKTP, PNPK, Fornas). Every recommendation carries a currency flag. When the corpus is silent, Anamnesa refuses rather than hallucinates.
+**Indonesian clinical-guideline retrieval agent.** Answers Bahasa Indonesia clinical questions with inline citations to the public-domain Kemenkes corpus (PPK FKTP, PNPK, Fornas). Every recommendation carries a currency flag. When the corpus is silent, Anamnesa refuses rather than hallucinates.
 
 | | |
 |---|---|
 | **Live demo** | [anamnesa.kudaliar.id](https://anamnesa.kudaliar.id) |
-| **Built for** | [Built-with-Opus-4.7 Claude Code hackathon](https://www.anthropic.com/), 21–27 April 2026 — PS1 *Build From What You Know* |
-| **Author** | Rifqi — emergency physician / GP, Banjarmasin, South Kalimantan |
-| **Status** | Deployed, open for use. Not a medical device. Reference only. |
-
----
-
-## Why this exists
-
-Indonesian GPs outside tertiary centers have no accessible clinical-decision-support tool. UpToDate / DynaMed / AMBOSS are **English-only and ≈ USD 499/year** — 1.5–2.5× a Puskesmas GP's monthly base salary — and none of them cover Indonesian national guidelines or BPJS Fornas formulary. At 3 a.m. on an ED shift, the current state of the art is Ctrl-F through a 900-page Kemenkes PDF on a phone.
-
-Anamnesa replaces that workflow with a typed Bahasa question and an answer cited down to the exact page of the governing guideline, in under three minutes. It's built first for me; anything beyond that is a bonus.
-
-The corpus strategy rests on **UU No. 28/2014 Pasal 42**, which removes copyright from *peraturan perundang-undangan* and *keputusan pejabat Pemerintah*. Every PNPK and PPK FKTP is a Lampiran of a Kepmenkes, which makes them public domain. Chunks and manifest are committed in this repo under that basis — see [`/legal`](https://anamnesa.kudaliar.id/legal) for the full analysis.
+| **Built for** | [Built-with-Opus-4.7 Claude Code hackathon](https://www.anthropic.com/), 21–27 April 2026 |
 
 ---
 
 ## What it does
 
-### Two query surfaces
+### Query surfaces
 
 | Mode | Endpoint | Cost | Latency | When to use |
 |---|---|---|---|---|
@@ -35,22 +23,22 @@ The corpus strategy rests on **UU No. 28/2014 Pasal 42**, which removes copyrigh
 
 Four agents run under a budget-guarded control loop, each emitting structured trace events streamed live to the UI:
 
-1. **Normalizer** (Haiku 4.5) — colloquial Bahasa → structured query. Refuses clearly on out-of-scope or patient-specific decision requests.
-2. **Retriever** — hybrid BGE-M3 vector + rank-bm25, reciprocal-rank fusion, metadata filters. No LLM. Exposed via the `anamnesa-mcp` MCP server; agents access it only through that tool boundary.
-3. **Drafter** (Opus 4.7, adaptive thinking, `high` effort) — composes a cited Bahasa answer via tool-use. Can narrow retrieval on its own if initial chunks are insufficient. Never invents citations.
-4. **Verifier** (Opus 4.7, 1M context, `high` effort) — independently re-reads every cited chunk, classifies each claim `supported | partial | unsupported`, calls `check_supersession` on every `doc_id` to attach a currency flag. If any claim is unsupported the Drafter gets **one** retry; after that the whole answer is refused.
+1. **Normalizer** (Haiku 4.5) — colloquial Bahasa → structured query. Refuses on out-of-scope or patient-specific decision requests.
+2. **Retriever** — hybrid BGE-M3 vector + rank-bm25 with reciprocal-rank fusion and metadata filters. No LLM. Exposed via the `anamnesa-mcp` MCP server; agents access it only through that tool boundary.
+3. **Drafter** (Opus 4.7, adaptive thinking, `high` effort) — composes a cited Bahasa answer via tool-use. Narrows retrieval on its own if initial chunks are insufficient. Never invents citations.
+4. **Verifier** (Opus 4.7, 1M context, `high` effort) — independently re-reads every cited chunk, classifies each claim `supported | partial | unsupported`, and calls `check_supersession` on every `doc_id` to attach a currency flag. One Drafter retry on unsupported claims; after that, the answer is refused.
 
 ### Multi-turn conversations
 
-A follow-up like *"dan kalau anak?"* is condensed back into a standalone clinical query before retrieval. The Normalizer receives both the prior turn and the terse follow-up, produces a properly-scoped structured query, and the pipeline continues normally. Threads persist to `localStorage` (24h TTL, capped at 5 turns) so accidental reloads don't lose context; a restored-session banner surfaces quietly on return.
+A follow-up like *"dan kalau anak?"* is condensed back into a standalone clinical query before retrieval. The Normalizer receives both the prior turn and the terse follow-up, produces a properly-scoped structured query, and the pipeline continues normally. Threads persist to `localStorage` (24 h TTL, 5 turns).
 
 ### Answer UX
 
 - Inline `[N]` citations scroll-and-flash to reference cards on click; bidirectional hover highlights cite ↔ ref pairs.
-- Per-answer **Salin** / **Unduh .md** / **Bagikan (WhatsApp)** — WhatsApp share is a deliberate choice because Indonesian GPs actually share references via WhatsApp groups.
-- "Dari cache · X menit lalu" badge — 24h SQLite answer cache, keyed on the canonical raw query.
+- Per-answer **Salin** / **Unduh .md** / **Bagikan (WhatsApp)**.
+- 24 h SQLite answer cache keyed on the canonical raw query.
 - 👍 / 👎 feedback written to SQLite; `/admin/feedback` dashboard auto-refreshes every 30 s.
-- On a `corpus_silent` refusal the UI renders the top 3 near-miss chunks the Retriever *did* find, so the user can see the gap for themselves rather than wondering if the app broke.
+- On a `corpus_silent` refusal the UI renders the top 3 near-miss chunks the Retriever *did* find.
 
 ---
 
@@ -60,14 +48,12 @@ A follow-up like *"dan kalau anak?"* is condensed back into a standalone clinica
 |---|---|
 | Documents in corpus | **81** |
 | Structured chunks | **9,083** |
-| Eval scenarios | **23 — drawn from Banjarmasin ED/GP shifts** |
+| Eval scenarios | **23** |
 | Pass rate | **23 / 23 (100%)** |
-| Hallucinated citations | **0 across every live run to date** |
-| Wall-clock, Mode Agen | ~130 s live / ~0 s on cache hit |
+| Hallucinated citations | **0** |
+| Wall-clock, Mode Agen | ~130 s live / ~0 s cached |
 | Wall-clock, Cari Cepat / Fornas | ~50 ms |
 | Test suite | 165 passing, ruff clean |
-
-Corpus breakdown: `pnpk 78` · `ppk_fktp 2 (2015 + 2022, both Lampiran I + II)` · `fornas 1 (2023)`.
 
 ---
 
@@ -95,7 +81,7 @@ cd web && npm install && npm run dev
 # open http://localhost:3000
 ```
 
-Crawled PDFs are not committed to keep the repo light. Re-run the crawler (see `agents/prompts/crawler.md`) or scp the cache from a peer if you want the in-app PDF viewer to open source pages.
+Crawled PDFs are not committed to keep the repo light. Re-run the crawler (see `agents/prompts/crawler.md`) or copy the cache from a peer if you want the in-app PDF viewer to open source pages.
 
 **Eval:**
 
@@ -157,7 +143,7 @@ python -m mcp.anamnesa_mcp
 └────────────────────────────────────────────────────────┘
 ```
 
-The [`CLAUDE.md`](./CLAUDE.md) file is the design spec the build agent anchored to throughout the week — read it if you want the full contract (refusal states, budget guardrails, trace event shapes, Bahasa conventions).
+The [`CLAUDE.md`](./CLAUDE.md) file is the design spec the build anchored to — read it for the full contract (refusal states, budget guardrails, trace event shapes, Bahasa conventions).
 
 ---
 
@@ -166,31 +152,14 @@ The [`CLAUDE.md`](./CLAUDE.md) file is the design spec the build agent anchored 
 Baked into every agent's system prompt:
 
 - **No answer without inline citation.** If retrieval is empty, refuse.
-- **No fallback on model-internal medical knowledge** when the corpus is silent. Anamnesa's value is provenance, not plausibility.
-- **No softening refusals to seem helpful.** An unfounded clinical answer is worse than "tidak ada pedoman untuk skenario ini."
-- **No patient-specific dosing decisions.** "Aman nggak dikasih X ke pasien saya?" → redirected to guideline-level information.
-- **No translation of guideline content to English.** Bahasa corpus ships Bahasa answers.
-
----
-
-## Honest caveats
-
-- **PPK FKTP 2015 is 11 years old.** 2022 is the current edition; both are indexed, and the Verifier's `check_supersession` marks 2015 chunks as `superseded` by 2022 before the answer ships.
-- **Corpus is not exhaustive.** 81 documents is broad but gaps exist. On a `corpus_silent` refusal the UI surfaces the near-miss chunks it *did* find so the reader can see the boundary.
-- **Cost per query is over the $0.20 target.** Currently $0.40–0.80 on a cache miss. The 24h answer cache drops repeat queries to $0.
-- **Not a medical device.** Not BPOM-registered. Every answer carries a disclaimer.
+- **No fallback on model-internal medical knowledge** when the corpus is silent. Provenance over plausibility.
+- **No softened refusals.** An unfounded clinical answer is worse than *"tidak ada pedoman untuk skenario ini."*
+- **No patient-specific dosing decisions.** Patient-specific questions are redirected to guideline-level information.
+- **No translation of guideline content.** The Bahasa corpus ships Bahasa answers.
 
 ---
 
 ## License
 
 - **Code:** MIT.
-- **Corpus** (chunks in `catalog/processed/`): public domain under UU 28/2014 Pasal 42.
-
----
-
-## Contact
-
-Rifqi — emergency physician, Banjarmasin. GitHub: [@0xNoramiya](https://github.com/0xNoramiya).
-
-Feedback from Indonesian clinicians is especially welcome — open an issue or email `rhaikal91@gmail.com`.
+- **Corpus** (chunks in `catalog/processed/`): public domain.
