@@ -62,3 +62,7 @@ web/.next/
 web/out/
 web/.env.local
 web/*.tsbuildinfo
+
+# Demo video — HyperFrames composition + generated narration + rendered MP4.
+# Kept local; the submission MP4 is uploaded directly rather than committed.
+video/
