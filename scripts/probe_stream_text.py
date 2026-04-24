@@ -79,7 +79,7 @@ async def main() -> None:
 
         final = stream.get_final_message()
         total = time.perf_counter() - t0
-        print(f"\n\n--- done ---")
+        print("\n\n--- done ---")
         print(f"total wall:        {total:.1f}s")
         print(f"first text delta:  {first_text_at:.1f}s" if first_text_at else "no text")
         print(f"text chars:        {len(text_buf)}")

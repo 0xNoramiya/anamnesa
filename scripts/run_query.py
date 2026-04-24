@@ -18,13 +18,13 @@ from dotenv import load_dotenv
 
 load_dotenv()  # side effect: .env → os.environ; idempotent; safe if absent.
 
-from agents.drafter import OpusDrafter  # noqa: E402
-from agents.normalizer import HaikuNormalizer  # noqa: E402
-from agents.verifier import OpusVerifier  # noqa: E402
-from core.budget import BudgetLimits  # noqa: E402
-from core.orchestrator import Orchestrator  # noqa: E402
-from core.retrieval import default_retriever  # noqa: E402
-from mcp.client import LocalRetriever  # noqa: E402
+from agents.drafter import OpusDrafter
+from agents.normalizer import HaikuNormalizer
+from agents.verifier import OpusVerifier
+from core.budget import BudgetLimits
+from core.orchestrator import Orchestrator
+from core.retrieval import default_retriever
+from mcp.client import LocalRetriever
 
 
 def main() -> int:

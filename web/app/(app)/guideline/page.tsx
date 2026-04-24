@@ -116,7 +116,6 @@ export default function GuidelinePage() {
         subtitle={`// ${t("topbar.guideline.sub")}`}
       />
       <div className="guideline-shell">
-        {/* Filters */}
         <aside
           className="guideline-filters scroll-civic"
           style={{
@@ -173,7 +172,6 @@ export default function GuidelinePage() {
           ))}
         </aside>
 
-        {/* List */}
         <div
           className="guideline-list scroll-civic"
           style={{
@@ -306,7 +304,6 @@ export default function GuidelinePage() {
           })}
         </div>
 
-        {/* Detail */}
         <aside
           className="guideline-detail scroll-civic"
           style={{

@@ -26,11 +26,11 @@ import re
 from contextlib import asynccontextmanager
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import structlog
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, PlainTextResponse, Response
 from pydantic import BaseModel
@@ -41,6 +41,13 @@ from core.manifest import Manifest
 from core.orchestrator import Orchestrator
 from core.retrieval import HybridRetriever
 from core.state import NormalizedQuery, QueryState, RetrievalFilters, TraceEvent
+from core.text_cleanup import beautify_slug as _beautify_slug
+from core.text_cleanup import clean_guideline_text as _clean_guideline_text
+
+if TYPE_CHECKING:
+    # Imported lazily at runtime inside _lifespan to keep boot imports lean,
+    # but declared here so annotations on app.state accessors type-check.
+    from core.cache import AnswerCache
 
 load_dotenv()
 log = structlog.get_logger("anamnesa.server")
@@ -55,12 +62,6 @@ def _load_manifest_sync(path: Path) -> Manifest:
 
 def _cache_path_exists_sync(p: Path) -> bool:
     return p.exists()
-
-
-# ---------------------------------------------------------------------------
-# Lifespan: build the orchestrator + its agents ONCE so BGE-M3 + HF cache
-# only load when the server boots, not per request.
-# ---------------------------------------------------------------------------
 
 
 @asynccontextmanager
@@ -128,13 +129,13 @@ async def _lifespan(app: FastAPI):
     feedback = FeedbackStore(feedback_path)
 
     app.state.orchestrator = orchestrator
-    app.state.hybrid = hybrid         # exposed for /api/search (fast mode)
+    app.state.hybrid = hybrid
     app.state.manifest = manifest
-    app.state.cache = cache           # exposed for /api/cache/* admin endpoints
-    app.state.feedback = feedback     # thumbs up/down store
-    app.state.running_queries = {}    # query_id -> asyncio.Queue
-    app.state.tasks = set()           # strong refs to in-flight background tasks
-    app.state.version = _detect_version()  # git sha + date; stable at boot
+    app.state.cache = cache
+    app.state.feedback = feedback
+    app.state.running_queries = {}  # query_id -> asyncio.Queue
+    app.state.tasks = set()         # strong refs to in-flight background tasks
+    app.state.version = _detect_version()
     log.info(
         "anamnesa.boot",
         docs=len(manifest.documents),
@@ -161,11 +162,6 @@ app.add_middleware(
 )
 
 
-# ---------------------------------------------------------------------------
-# Schemas
-# ---------------------------------------------------------------------------
-
-
 class QueryRequest(BaseModel):
     query: str
     # Optional prior-turn context for multi-turn chat. When present, the
@@ -183,7 +179,7 @@ class QueryCreated(BaseModel):
 class FeedbackRequest(BaseModel):
     query_id: str
     query_text: str
-    rating: str                    # "up" | "down"
+    rating: str  # "up" | "down"
     note: str | None = None
     answer_sha: str | None = None
 
@@ -191,11 +187,6 @@ class FeedbackRequest(BaseModel):
 class FeedbackResponse(BaseModel):
     id: str
     stored: bool = True
-
-
-# ---------------------------------------------------------------------------
-# Routes
-# ---------------------------------------------------------------------------
 
 
 @app.get("/api/health")
@@ -217,15 +208,13 @@ async def meta() -> dict[str, Any]:
     hybrid = app.state.hybrid
     cache: AnswerCache | None = getattr(app.state, "cache", None)
 
-    # Corpus year range — loop is cheap, 80 entries.
     years = [d.year for d in manifest.documents if d.year]
     year_min = min(years) if years else None
     year_max = max(years) if years else None
 
-    # Chunk count — prefer the BM25-backed store since it's authoritative
-    # for what's actually queryable.
+    # BM25-backed store is authoritative for what's actually queryable.
     try:
-        chunk_count = int(len(getattr(hybrid, "_bm25_chunks", []) or []))
+        chunk_count = len(getattr(hybrid, "_bm25_chunks", []) or [])
     except Exception:
         chunk_count = 0
 
@@ -314,7 +303,6 @@ async def manifest_summary(full: int = 0) -> dict[str, Any]:
                     "supersedes": list(d.supersedes),
                 }
             )
-        # Stable sort: newest year first, then title.
         documents.sort(key=lambda r: (-(r["year"] or 0), r["title"].lower()))
         payload["documents"] = documents
 
@@ -333,8 +321,8 @@ async def fast_search(q: str, limit: int = 20) -> dict[str, Any]:
     q_clean = q.strip()
     if not q_clean:
         raise HTTPException(400, "empty query")
-    # Cap to sane bounds — retriever fans out both BM25 + vector by 3x
-    # internally, so limit=20 already means 60 candidates fused.
+    # Retriever fans out BM25 + vector by 3x internally, so limit=20 already
+    # fuses 60 candidates.
     limit = max(1, min(int(limit), 50))
 
     hybrid: HybridRetriever = app.state.hybrid
@@ -344,7 +332,6 @@ async def fast_search(q: str, limit: int = 20) -> dict[str, Any]:
     )
     chunks = hybrid.search_guidelines(nq, RetrievalFilters(top_k=limit))
 
-    # Also surface doc-level aggregates so the UI can show "3 PDFs, 12 hits".
     per_doc: dict[str, int] = {}
     for c in chunks:
         per_doc[c.doc_id] = per_doc.get(c.doc_id, 0) + 1
@@ -360,11 +347,9 @@ async def fast_search(q: str, limit: int = 20) -> dict[str, Any]:
     }
 
 
-# ---------------------------------------------------------------------------
-# Drug lookup — pure text search over the Fornas (BPJS formulary) chunks.
-# No LLM, target <300ms. Fornas is page-chunked, so a single hit returns
-# the whole page as a snippet and a link to the guideline HTML anchor.
-# ---------------------------------------------------------------------------
+# Drug lookup: pure text search over the Fornas (BPJS formulary) chunks.
+# No LLM, target <300ms. Fornas is page-chunked, so a single hit returns the
+# whole page as a snippet and a link to the guideline HTML anchor.
 
 _DRUG_DOC_ID = "fornas-2023"
 _drug_chunks_cache: list[dict[str, Any]] | None = None
@@ -491,7 +476,6 @@ async def drug_lookup(q: str, limit: int = 15) -> dict[str, Any]:
                 matched_query = translit
                 translit_used = True
 
-    # Rank: most hits first, then page ascending as a stable tiebreaker.
     results.sort(key=lambda r: (-r["hits"], r["page"]))
     total_hits = sum(r["hits"] for r in results)
     total_pages = len(results)
@@ -566,17 +550,14 @@ async def drug_mentions(
                 matched_query = translit
                 translit_used = True
 
-    # Collapse to one row per (doc_id, page), ranked by hits desc then page asc.
     matches.sort(key=lambda r: (-r["hits"], r["doc_id"], r["page"]))
 
-    # Attach doc titles + year from the manifest for the UI.
     m: Manifest = app.state.manifest
     doc_meta: dict[str, dict[str, Any]] = {
         d.doc_id: {"title": d.title, "year": d.year, "source_type": d.source_type}
         for d in m.documents
     }
 
-    # Per-doc aggregate for the header summary.
     per_doc: dict[str, dict[str, Any]] = {}
     for row in matches:
         did = row["doc_id"]
@@ -598,7 +579,6 @@ async def drug_mentions(
     )
 
     truncated = matches[:limit]
-    # Enrich each row with the doc title for easy UI rendering.
     for row in truncated:
         meta = doc_meta.get(row["doc_id"], {})
         row["title"] = meta.get("title", row["doc_id"])
@@ -634,18 +614,20 @@ async def post_feedback(req: FeedbackRequest) -> FeedbackResponse:
             answer_sha=req.answer_sha,
         )
     except ValueError as exc:
-        raise HTTPException(400, str(exc))
+        raise HTTPException(400, str(exc)) from exc
     return FeedbackResponse(id=entry_id, stored=True)
 
 
 @app.get("/api/feedback/stats")
-async def feedback_stats(all: int = 0) -> dict[str, Any]:
+async def feedback_stats(
+    include_smoke: int = Query(0, alias="all"),
+) -> dict[str, Any]:
     """Stats excludes SMOKE-* entries by default (they're from the prod
     smoke-test script, not real user feedback). Pass ?all=1 to include."""
     store = getattr(app.state, "feedback", None)
     if store is None:
         raise HTTPException(503, "feedback store not initialized")
-    return store.stats(include_smoke=bool(all))
+    return store.stats(include_smoke=bool(include_smoke))
 
 
 @app.post("/api/query", response_model=QueryCreated)
@@ -659,16 +641,13 @@ async def create_query(req: QueryRequest) -> QueryCreated:
 
     prior_turn: dict[str, str] | None = None
     if req.prior_query and req.prior_answer:
-        # Trim the excerpt — full answers can be 3-5k chars which is wasteful
-        # when the Normalizer only needs a gist to condense the follow-up.
+        # Trim: full answers can be 3-5k chars; Normalizer only needs a gist.
         prior_turn = {
             "query": req.prior_query.strip()[:500],
             "answer": req.prior_answer.strip()[:1200],
         }
 
-    # Kick off the orchestrator in the background; it publishes each
-    # trace event + the final response through the queue. Task reference
-    # stashed on app.state so it isn't GC'd before completion.
+    # Task reference stashed on app.state so it isn't GC'd before completion.
     task = asyncio.create_task(_run_query(query_id, text, queue, prior_turn))
     app.state.tasks.add(task)
     task.add_done_callback(app.state.tasks.discard)
@@ -684,9 +663,9 @@ async def _run_query(
 ) -> None:
     orchestrator: Orchestrator = app.state.orchestrator
 
-    # Tee: watch state.trace_events as the orchestrator mutates it, forward
-    # new entries to the queue. We run the orchestrator and a pump in
-    # parallel via a shared state pointer.
+    # Watch state.trace_events as the orchestrator mutates it and forward
+    # new entries to the queue. Orchestrator and pump run in parallel via a
+    # shared state pointer.
     state_box: dict[str, QueryState] = {}
 
     async def pump_events() -> None:
@@ -710,26 +689,22 @@ async def _run_query(
 
     async def run_orch() -> None:
         # Pre-build state so the pump can watch trace_events from turn 0.
-        # Orchestrator.run() accepts an optional `state` param precisely
-        # for this SSE streaming use case.
         state = QueryState(original_query=text, query_id=query_id)
         state_box["state"] = state
         try:
             await orchestrator.run(text, state=state, prior_turn=prior_turn)
         except Exception as exc:
-            # Catch-all by design: anything from model transport, retrieval
-            # backend, validation, etc. should become a stream error event
-            # rather than crash the request handler. Logged with traceback.
+            # Catch-all: any failure (transport, retrieval, validation) must
+            # become a stream error event rather than crash the handler.
             log.exception("anamnesa.query_failed", query_id=query_id)
             await queue.put(
                 {"kind": "error", "payload": {"error": f"{type(exc).__name__}: {exc}"}}
             )
             await queue.put(None)
 
-    # Intentionally NOT popping running_queries here — see the stream
-    # handler. Fast-finishing queries (e.g. normalizer refusals) can
-    # complete before the client connects to the stream; keeping the
-    # queue alive until the stream is drained avoids a race 404.
+    # running_queries is popped by the stream handler, not here: fast-finishing
+    # queries (e.g. normalizer refusals) can complete before the client
+    # connects, so keeping the queue alive until drained avoids a race 404.
     await asyncio.gather(run_orch(), pump_events())
 
 
@@ -755,16 +730,11 @@ async def stream(query_id: str) -> EventSourceResponse:
                     "data": json.dumps(item["payload"], ensure_ascii=False),
                 }
         finally:
-            # The stream owns queue cleanup — stream completion (drained
-            # or client disconnect) is the correct trigger to pop.
+            # Stream completion (drained or client disconnect) is the correct
+            # trigger to pop from running_queries.
             app.state.running_queries.pop(query_id, None)
 
     return EventSourceResponse(events())
-
-
-# ---------------------------------------------------------------------------
-# PDF passthrough
-# ---------------------------------------------------------------------------
 
 
 def _load_processed_chunks(rec) -> list[dict[str, Any]] | None:
@@ -780,7 +750,6 @@ def _load_processed_chunks(rec) -> list[dict[str, Any]] | None:
         return None
     if not isinstance(raw, list):
         return None
-    # Defensive: keep only dicts with the required fields.
     clean: list[dict[str, Any]] = []
     for row in raw:
         if not isinstance(row, dict):
@@ -788,19 +757,8 @@ def _load_processed_chunks(rec) -> list[dict[str, Any]] | None:
         if "text" not in row or "page" not in row:
             continue
         clean.append(row)
-    # Stable sort: by page ascending, then by section_path for determinism.
     clean.sort(key=lambda r: (int(r.get("page", 0) or 0), str(r.get("section_path", ""))))
     return clean
-
-
-# Guideline text cleanup lives in core.text_cleanup so the same rules
-# apply to both human-facing HTML/Markdown and to retriever responses
-# the Drafter reads. Re-exported under the private names used through
-# the rest of this module.
-from core.text_cleanup import (
-    beautify_slug as _beautify_slug,
-    clean_guideline_text as _clean_guideline_text,
-)
 
 
 def _render_guideline_markdown(rec, chunks: list[dict[str, Any]]) -> str:
@@ -936,7 +894,10 @@ h3 {
   margin: 18px 0 4px; font-size: 14.5px; font-family: var(--mono);
   color: var(--ink-2); letter-spacing: 0.02em; font-weight: 500;
 }
-.path { color: var(--ink-3); font-family: var(--mono); font-size: 11px; margin: 0 0 8px; word-break: break-all; }
+.path {
+  color: var(--ink-3); font-family: var(--mono); font-size: 11px;
+  margin: 0 0 8px; word-break: break-all;
+}
 p { margin: 0 0 14px; white-space: pre-wrap; word-wrap: break-word; overflow-wrap: anywhere; }
 .to-top {
   position: fixed; bottom: 14px; right: 14px;
@@ -964,13 +925,12 @@ def _build_toc(chunks: list[dict[str, Any]]) -> list[tuple[str, list[tuple[str, 
     """Group (chapter, section_slug, first_page) tuples for TOC rendering.
 
     Returns [(chapter_title, [(section_title, first_page), ...]), ...].
-    Chapter = first segment of section_path (e.g. "bab_1", "bab_iii").
-    Sections with page-suffixed slugs like "diagnosis-p11" collapse
-    back to their parent by stripping the /p{N} tail — so a 20-page
-    "diagnosis" section gets one TOC entry, not 20.
+    Chapter = first segment of section_path. Page-suffixed slugs like
+    "diagnosis-p11" collapse back to their parent so a 20-page "diagnosis"
+    section gets one TOC entry, not 20.
     """
     seen: set[tuple[str, str]] = set()
-    order: list[tuple[str, str, int]] = []  # (chapter, section, first_page)
+    order: list[tuple[str, str, int]] = []
     for c in chunks:
         path = str(c.get("section_path") or "").strip()
         if not path or "/" not in path:
@@ -978,21 +938,18 @@ def _build_toc(chunks: list[dict[str, Any]]) -> list[tuple[str, list[tuple[str, 
         page = int(c.get("page", 0) or 0)
         segments = path.split("/")
         chapter = segments[0]
-        # Use the second path segment (the "real" section), not the
-        # leaf page-slug variants like "diagnosis/p11".
+        # Use the second path segment (the "real" section), not leaf
+        # page-slug variants like "diagnosis/p11".
         section_raw = segments[1] if len(segments) > 1 else ""
         if not section_raw or section_raw == chapter:
             continue
-        # Strip page-suffix from slugs that were split per-page.
         section = re.sub(r"-?p\d+$", "", section_raw)
         if (chapter, section) in seen:
             continue
         seen.add((chapter, section))
         order.append((chapter, section, page))
 
-    # Group by chapter, preserving first-seen order within each group.
-    # Junk sections (empty after beautify — single-letter watermark
-    # slugs like "e") are skipped entirely.
+    # Junk sections (single-letter watermark slugs like "e") skipped.
     groups: dict[str, list[tuple[str, int]]] = {}
     chapter_order: list[str] = []
     for chapter, section, page in order:
@@ -1007,9 +964,7 @@ def _build_toc(chunks: list[dict[str, Any]]) -> list[tuple[str, list[tuple[str, 
     result: list[tuple[str, list[tuple[str, int]]]] = []
     for chapter in chapter_order:
         chapter_title = _beautify_slug(chapter) or chapter.replace("-", " ").replace("_", " ")
-        # "Bab_1" and "Bab I" both want to read as "Bab 1" / "Bab I" —
-        # beautify already title-cases, so just uppercase the roman/arabic
-        # number tail for readability.
+        # Uppercase the roman/arabic number tail for readability.
         chapter_title = re.sub(
             r"\b(Bab|Lampiran)\s+([a-z0-9ivx]+)\b",
             lambda m: f"{m.group(1)} {m.group(2).upper()}",
@@ -1028,9 +983,8 @@ def _render_guideline_html(rec, chunks: list[dict[str, Any]]) -> str:
     def esc(s: str) -> str:
         return html_lib.escape(s, quote=True)
 
-    # Group chunks by page so we can render one <section> per page
-    # with an id anchor. 900+ pages is a lot — the TOC at the top
-    # gives the user a jump index.
+    # One <section> per page with an id anchor. The TOC at the top gives the
+    # user a jump index for 900+ page docs.
     pages: list[tuple[int, list[dict[str, Any]]]] = []
     current_page: int | None = None
     for c in chunks:
@@ -1041,12 +995,11 @@ def _render_guideline_html(rec, chunks: list[dict[str, Any]]) -> str:
         else:
             pages[-1][1].append(c)
 
-    # Header
     meta_bits: list[str] = [
         f"<span>{esc(rec.doc_id)}</span>",
-        f'<span class="meta-sep">·</span>',
+        '<span class="meta-sep">·</span>',
         f"<span>{esc(rec.source_type.replace('_', ' ').upper())}</span>",
-        f'<span class="meta-sep">·</span>',
+        '<span class="meta-sep">·</span>',
         f"<span>{rec.year}</span>",
     ]
     if rec.authority:
@@ -1078,9 +1031,8 @@ def _render_guideline_html(rec, chunks: list[dict[str, Any]]) -> str:
     )
     parts.append("</header>\n")
 
-    # Table of contents — rendered only when the doc has enough
-    # section structure to be worth navigating (≥2 chapter groups or
-    # ≥5 sections total). First chapter stays expanded by default.
+    # TOC rendered only when the doc has enough structure (≥2 chapter groups
+    # or ≥5 sections). First chapter stays expanded by default.
     toc_groups = _build_toc(chunks)
     total_sections = sum(len(g[1]) for g in toc_groups)
     if len(toc_groups) >= 2 or total_sections >= 5:
@@ -1106,7 +1058,7 @@ def _render_guideline_html(rec, chunks: list[dict[str, Any]]) -> str:
         page_label = f"HALAMAN {page_num}" if page_num else "PENDAHULUAN"
         parts.append(f'<section class="page" id="{anchor}">\n')
         parts.append(f'<div class="page-label">{page_label}</div>\n')
-        # First chunk on this page: use its section_slug as the h2.
+        # First chunk on the page: use its section_slug as the h2.
         first = page_chunks[0]
         first_slug_pretty = _beautify_slug(str(first.get("section_slug") or ""))
         if first_slug_pretty:
@@ -1116,14 +1068,11 @@ def _render_guideline_html(rec, chunks: list[dict[str, Any]]) -> str:
             slug_pretty = _beautify_slug(slug_raw)
             path = str(chunk.get("section_path") or "").strip()
             text = _clean_guideline_text(str(chunk.get("text") or ""))
-            # Use h3 for subsequent section slugs within the same page.
             if i > 0 and slug_pretty:
                 parts.append(f"<h3>{esc(slug_pretty)}</h3>\n")
-            # Show the full hierarchical path only when it adds info
-            # beyond the heading we just rendered — avoids the ugly
-            # h3 "Latar Belakang" / path "bab_1/latar-belakang" dupe.
-            # Also skip when the slug itself was junk (single-letter
-            # watermark) since the path's last segment is the same junk.
+            # Show the full hierarchical path only when it adds info beyond
+            # the heading just rendered — avoids "Latar Belakang" / path
+            # "bab_1/latar-belakang" duplicates. Also skip junk slugs.
             if (
                 slug_pretty
                 and path
@@ -1184,11 +1133,10 @@ async def pdf(doc_id: str) -> FileResponse:
     if rec is None or not rec.cache_path:
         raise HTTPException(404, f"no PDF on record for {doc_id!r}")
     p = Path(rec.cache_path)
-    # Sync stat is cheap; ruff ASYNC240 is over-cautious for a one-shot check.
     if not _cache_path_exists_sync(p):
         raise HTTPException(404, f"PDF file missing at {p}")
-    # `inline` so the browser's built-in PDF viewer (or our iframe) renders
-    # it; omit `filename=` to avoid the default `attachment` disposition.
+    # `inline` so the browser's PDF viewer (or our iframe) renders it;
+    # omit `filename=` to avoid the default `attachment` disposition.
     return FileResponse(
         path=p,
         media_type="application/pdf",

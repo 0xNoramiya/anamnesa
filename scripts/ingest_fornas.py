@@ -29,10 +29,8 @@ from typing import Any
 
 import pdfplumber
 
-# ---------------------------------------------------------------------------
-# Config — specific to the 2023 Fornas. Swap these for the 2024 amendment
+# Config specific to the 2023 Fornas. Swap these for the 2024 amendment
 # if/when that ingest lands.
-# ---------------------------------------------------------------------------
 DOC_ID = "fornas-2023"
 SOURCE_TYPE = "fornas"
 TITLE = (
@@ -51,14 +49,10 @@ OUT_DIR = REPO / "catalog" / "processed" / "fornas"
 MANIFEST_PATH = REPO / "catalog" / "manifest.json"
 
 
-# ---------------------------------------------------------------------------
-# Section-slug heuristic
-# ---------------------------------------------------------------------------
-# The Fornas pages open with a "KELAS TERAPI" header table on the first
-# page where each kelas begins. Subsequent pages within the same kelas
-# continue the drug list without repeating the class header. We carry
-# the last-seen header forward so every chunk has a useful slug.
-
+# Fornas pages open with a "KELAS TERAPI" header table on the first page
+# where each kelas begins. Subsequent pages within the same kelas continue
+# the drug list without repeating the class header — carry the last-seen
+# header forward so every chunk has a useful slug.
 _CLASS_LINE = re.compile(
     r"\bkelas\s+terapi\s*[:.]?\s*(\d+)\.?\s*(.+?)(?:$|SUB\s+KELAS|/)",
     re.IGNORECASE,
@@ -156,15 +150,8 @@ def write_processed(chunks: list[dict[str, Any]]) -> Path:
 
 
 def upsert_manifest() -> None:
-    """Add or update the Fornas record in catalog/manifest.json.
-
-    Uses the existing schema; sets status='indexed' so the default
-    UI filters show it. We don't re-read via manifest_append's CLI
-    here because we already have the record fields literally — the
-    server restart will pick up the new record on next boot.
-    """
+    """Add or update the Fornas record in catalog/manifest.json."""
     data = json.loads(MANIFEST_PATH.read_text(encoding="utf-8"))
-    # Pages count from the PDF
     with pdfplumber.open(str(PDF_PATH)) as pdf:
         pages = len(pdf.pages)
     size = PDF_PATH.stat().st_size

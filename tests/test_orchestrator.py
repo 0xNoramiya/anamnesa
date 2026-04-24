@@ -45,11 +45,6 @@ def _orchestrator(
     )
 
 
-# ---------------------------------------------------------------------------
-# Happy path
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.asyncio
 async def test_happy_path_returns_final_response_with_citations() -> None:
     normalizer = FakeNormalizer(make_normalized())
@@ -72,11 +67,6 @@ async def test_happy_path_returns_final_response_with_citations() -> None:
     assert len(retriever.calls) == 1
 
 
-# ---------------------------------------------------------------------------
-# Normalizer-level refusal
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.asyncio
 async def test_normalizer_refusal_short_circuits_everything() -> None:
     normalizer = FakeNormalizer(normalizer_refusal(RefusalReason.OUT_OF_MEDICAL_SCOPE))
@@ -97,15 +87,10 @@ async def test_normalizer_refusal_short_circuits_everything() -> None:
     assert len(retriever.calls) == 0
 
 
-# ---------------------------------------------------------------------------
-# Drafter requests more retrieval, succeeds on 2nd try
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.asyncio
 async def test_drafter_requests_more_retrieval_then_answers() -> None:
     normalizer = FakeNormalizer(make_normalized())
-    retriever = FakeRetriever(script=[[], [make_chunk()]])  # 1st empty, 2nd hits
+    retriever = FakeRetriever(script=[[], [make_chunk()]])
     drafter = FakeDrafter(
         script=[
             drafter_need_more(feedback="empty result set, narrow to ppk_fktp"),
@@ -127,11 +112,6 @@ async def test_drafter_requests_more_retrieval_then_answers() -> None:
     assert retriever.calls[1].conditions == ["dengue"]
 
 
-# ---------------------------------------------------------------------------
-# Drafter refusal propagates
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.asyncio
 async def test_drafter_refusal_propagates_to_final_response() -> None:
     normalizer = FakeNormalizer(make_normalized())
@@ -148,11 +128,6 @@ async def test_drafter_refusal_propagates_to_final_response() -> None:
     assert state.final_response is not None
     assert state.final_response.refusal_reason is RefusalReason.CORPUS_SILENT
     assert verifier.calls == 0
-
-
-# ---------------------------------------------------------------------------
-# Retrieval-attempt budget exhausted
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -178,11 +153,6 @@ async def test_retrieval_budget_exhausted_when_drafter_keeps_asking() -> None:
     assert len(retriever.calls) == 3
 
 
-# ---------------------------------------------------------------------------
-# Verifier rejects → one retry → success
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.asyncio
 async def test_verifier_rejects_then_drafter_revises_successfully() -> None:
     normalizer = FakeNormalizer(make_normalized())
@@ -205,11 +175,6 @@ async def test_verifier_rejects_then_drafter_revises_successfully() -> None:
     assert drafter.last_feedback == "c1 not grounded"
 
 
-# ---------------------------------------------------------------------------
-# Verifier rejects twice → refusal
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.asyncio
 async def test_verifier_rejects_twice_triggers_refusal() -> None:
     normalizer = FakeNormalizer(make_normalized())
@@ -227,11 +192,6 @@ async def test_verifier_rejects_twice_triggers_refusal() -> None:
     assert state.refusal_reason is RefusalReason.CITATIONS_UNVERIFIABLE
     assert state.final_response is not None
     assert state.final_response.refusal_reason is RefusalReason.CITATIONS_UNVERIFIABLE
-
-
-# ---------------------------------------------------------------------------
-# Trace events always present
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -252,11 +212,6 @@ async def test_trace_events_populated_for_every_agent_invocation() -> None:
     assert any(e.event_type == "query_completed" for e in state.trace_events)
 
 
-# ---------------------------------------------------------------------------
-# Final answer always carries currency flags from verifier
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.asyncio
 async def test_currency_flags_flow_from_verifier_to_final() -> None:
     normalizer = FakeNormalizer(make_normalized())
@@ -274,11 +229,6 @@ async def test_currency_flags_flow_from_verifier_to_final() -> None:
     assert len(flags) == 1
     assert flags[0].status == "aging"
     assert flags[0].citation_key == "PPK-FKTP-2015:p412:dbd_tata_laksana"
-
-
-# ---------------------------------------------------------------------------
-# Exception inside an agent surfaces loudly (no swallowing)
-# ---------------------------------------------------------------------------
 
 
 class _ExplodingDrafter:
@@ -302,11 +252,6 @@ async def test_agent_exceptions_are_not_swallowed() -> None:
         await orch.run("q")
 
 
-# ---------------------------------------------------------------------------
-# FinalResponse shape sanity
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.asyncio
 async def test_final_response_contains_query_id_matching_state() -> None:
     normalizer = FakeNormalizer(make_normalized())
@@ -323,11 +268,6 @@ async def test_final_response_contains_query_id_matching_state() -> None:
     assert state.final_response.query_id == state.query_id
 
 
-# ---------------------------------------------------------------------------
-# Empty filters on first call (no filter_hints from drafter yet)
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.asyncio
 async def test_first_retrieval_uses_default_filters() -> None:
     normalizer = FakeNormalizer(make_normalized())
@@ -341,6 +281,5 @@ async def test_first_retrieval_uses_default_filters() -> None:
     await orch.run("q")
 
     assert isinstance(retriever.calls[0], RetrievalFilters)
-    # Default filters are empty / top_k default
     assert retriever.calls[0].top_k == 10
     assert retriever.calls[0].doc_ids is None

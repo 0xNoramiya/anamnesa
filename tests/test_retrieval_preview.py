@@ -54,13 +54,11 @@ async def test_corpus_silent_refusal_surfaces_top_chunks() -> None:
     assert fr is not None
     assert fr.refusal_reason == RefusalReason.CORPUS_SILENT
     assert len(fr.retrieval_preview) == 3
-    # Preserves chunk ordering from the retriever.
     assert [h.doc_id for h in fr.retrieval_preview] == [
         "ppk-fktp-2015",
         "pnpk-tb-2019",
         "pnpk-dbd-anak-2014",
     ]
-    # Preview text is whitespace-collapsed and length-bounded.
     for hint in fr.retrieval_preview:
         assert "\n" not in hint.text_preview
         assert len(hint.text_preview) <= 220

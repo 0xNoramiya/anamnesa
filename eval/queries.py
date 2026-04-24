@@ -51,11 +51,6 @@ class EvalQuery(BaseModel):
     rationale: str = ""
 
 
-# ---------------------------------------------------------------------------
-# The 20 queries
-# ---------------------------------------------------------------------------
-
-
 QUERIES: list[EvalQuery] = [
     # ---- grounded: ED acute (7) ----
     EvalQuery(

@@ -6,7 +6,7 @@
 - Restart frontend, smoke-check
 """
 
-from scripts.deploy_helper import ssh, run
+from scripts.deploy_helper import run, ssh
 
 
 def main() -> None:
@@ -19,7 +19,6 @@ def main() -> None:
         run(c, "systemctl restart anamnesa-backend")
         run(c, "sleep 3 && systemctl is-active anamnesa-backend")
 
-        # Smoke-check the new endpoint directly against the backend port.
         run(
             c,
             "curl -fsS 'http://127.0.0.1:8000/api/drug-lookup?q=metformin&limit=2' "
@@ -37,7 +36,6 @@ def main() -> None:
         run(c, "systemctl restart anamnesa-frontend")
         run(c, "sleep 3 && systemctl is-active anamnesa-frontend")
 
-        # Public-facing smoke: /obat should 200 through Caddy.
         run(
             c,
             "curl -fsS -o /dev/null -w 'obat=%{http_code}\\n' "

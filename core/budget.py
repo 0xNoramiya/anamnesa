@@ -70,8 +70,6 @@ class BudgetTracker:
         self.verifier_calls = 0
         self.total_tokens = 0
 
-    # ---- monotonic / wall clock ----
-
     def elapsed_seconds(self) -> float:
         return self._monotonic() - self._start
 
@@ -82,8 +80,6 @@ class BudgetTracker:
                 RefusalReason.WALL_CLOCK_EXHAUSTED,
                 f"{elapsed:.1f}s > {self.limits.max_wall_clock_seconds}s",
             )
-
-    # ---- counters ----
 
     def charge_retrieval(self) -> None:
         """Call before starting a retrieval attempt."""

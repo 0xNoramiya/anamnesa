@@ -31,7 +31,7 @@ async def main() -> None:
     os.environ.setdefault("ANAMNESA_EMBEDDER", "bge")
 
     cache_db = Path("/tmp/anamnesa_probe_cache.db")
-    cache_db.unlink(missing_ok=True)  # start clean for this probe
+    cache_db.unlink(missing_ok=True)  # noqa: ASYNC240 — one-off probe, not a server path
     cache = AnswerCache(cache_db)
 
     hybrid = default_retriever()

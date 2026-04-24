@@ -8,7 +8,7 @@
 
 from pathlib import Path
 
-from scripts.deploy_helper import ssh, run, upload_file
+from scripts.deploy_helper import run, ssh, upload_file
 
 REPO = Path("/home/kudaliar/hackathon/anamnesa")
 REMOTE = "/opt/anamnesa"
@@ -26,8 +26,7 @@ def main() -> None:
         for rel in FILES:
             upload_file(c, REPO / rel, f"{REMOTE}/{rel}")
 
-        # Idempotently append the effort overrides. `grep -q` + append
-        # avoids duplicate lines on re-runs.
+        # Idempotent: `grep -q` + append avoids duplicate lines on re-runs.
         run(
             c,
             "grep -q '^ANAMNESA_DRAFTER_EFFORT=' /opt/anamnesa/.env "
@@ -38,7 +37,6 @@ def main() -> None:
             "grep -q '^ANAMNESA_VERIFIER_EFFORT=' /opt/anamnesa/.env "
             "|| echo 'ANAMNESA_VERIFIER_EFFORT=high' >> /opt/anamnesa/.env",
         )
-        # Confirm.
         run(c, "grep -E '^ANAMNESA_(DRAFTER|VERIFIER)_EFFORT' /opt/anamnesa/.env")
 
         run(c, "systemctl restart anamnesa-backend")

@@ -75,7 +75,8 @@ class FeedbackStore:
         trimmed_query = (query_text or "")[:2000]
         with self._lock:
             self._conn.execute(
-                "INSERT INTO feedback (id, query_id, query_text, rating, note, answer_sha, created_at) "
+                "INSERT INTO feedback "
+                "(id, query_id, query_text, rating, note, answer_sha, created_at) "
                 "VALUES (?, ?, ?, ?, ?, ?, ?)",
                 (
                     entry_id,

@@ -50,7 +50,6 @@ export function Sidebar({ collapsed = false }: Props) {
         height: "100%",
       }}
     >
-      {/* Top: logo */}
       <div
         style={{
           padding: collapsed ? "18px 18px 14px" : "18px 20px 14px",
@@ -66,7 +65,6 @@ export function Sidebar({ collapsed = false }: Props) {
         </Link>
       </div>
 
-      {/* Nav */}
       <nav
         style={{ flex: 1, padding: "14px 10px", overflowY: "auto" }}
         className="scroll-civic"
@@ -126,7 +124,6 @@ export function Sidebar({ collapsed = false }: Props) {
         })}
       </nav>
 
-      {/* Bottom: trust footer + language + theme toggles */}
       <div
         style={{
           borderTop: "1px solid var(--rule)",

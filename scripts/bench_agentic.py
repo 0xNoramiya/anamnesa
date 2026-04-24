@@ -138,7 +138,6 @@ async def main() -> None:
         print(f"  preview:  {row['answer_preview']}\n")
         rows.append(row)
 
-    # Summary delta.
     b, f = rows[0], rows[1]
     delta_s = b["wall_s"] - f["wall_s"]
     pct = 100 * delta_s / b["wall_s"] if b["wall_s"] else 0

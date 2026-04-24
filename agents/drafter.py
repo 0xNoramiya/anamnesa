@@ -1,38 +1,18 @@
 """Drafter agent — Opus 4.7 with adaptive thinking.
 
-Implements the Drafter described in CLAUDE.md > "Agent roster" > Drafter and
-in `agents/prompts/drafter.md`.
-
-Decision space (one of three terminal outcomes):
-  - `answer`              — cited Bahasa draft, one citation per claim
+Runs an Anthropic tool-use loop that terminates with one of three decisions
+via the `submit_decision` tool:
+  - `answer` — cited Bahasa draft, one citation per claim
   - `need_more_retrieval` — ask the orchestrator to search again
-  - `refuse`              — corpus silent / out of scope / patient-specific
+  - `refuse` — corpus silent / out of scope / patient-specific
 
-Mechanism: Anthropic tool-use loop. Four tools are exposed to Claude:
-
-  - `search_guidelines`   — narrower retrieval via the injected `Retriever`
-  - `get_full_section`    — fetch surrounding text if the retriever supports it
-  - `submit_decision`     — terminal tool; its input IS the `DrafterResult`
-
-Design choices (documented inline because they are non-obvious):
-
-1. Intra-drafter `search_guidelines` calls are private. They go through the
-   same `Retriever` protocol but do NOT mutate `state.retrieval_attempts`
-   — the orchestrator manages `retrieval_attempts` as the per-query budget
-   counter. The drafter's "please re-retrieve" request to the orchestrator
-   is the `need_more_retrieval` decision, not these intra-loop calls.
-
-2. If Claude ends the turn without ever calling `submit_decision` we return
-   `DrafterRefuse(reason=RefusalReason.CITATIONS_UNVERIFIABLE)`. There is
-   no refusal enum for "drafter produced malformed output". The closest
-   semantic match is `citations_unverifiable` — we could not ground what
-   the drafter did (or did not) produce; the verifier-gate failure lane
-   is the right terminal state.
-
-3. Hard cap at 8 iterations. If Claude keeps calling helper tools without
-   ever submitting, we refuse with `citations_unverifiable` and log.
-
-Transport errors propagate per the "Errors loud, not swallowed" rule.
+Invariants:
+- Intra-loop `search_guidelines` calls do NOT mutate `state.retrieval_attempts`
+  — that budget belongs to the orchestrator. Re-retrieval requests surface as
+  the `need_more_retrieval` decision instead.
+- Malformed output (no `submit_decision`, loop cap exceeded, unparseable tool
+  input) maps to `CITATIONS_UNVERIFIABLE`. There is no dedicated "drafter
+  malformed" refusal enum.
 """
 
 from __future__ import annotations
@@ -66,19 +46,16 @@ from core.trace import trace
 log = structlog.get_logger("anamnesa.agents.drafter")
 
 DEFAULT_MODEL_ID = "claude-opus-4-7"
-MAX_OUTPUT_TOKENS = 16_000  # includes adaptive-thinking tokens on Opus 4.7
-# Drafter now defaults to thinking_budget=0 because adaptive thinking
-# batches all output through the tool call → no text streaming, which
-# defeats the live-answer UX. Rollback to 8000 is a single-arg change
-# if future benchmarks show quality drift.
+MAX_OUTPUT_TOKENS = 16_000
+# thinking_budget=0: adaptive thinking batches all output through the tool
+# call and disables text streaming, which defeats the live-answer UX.
 DEFAULT_THINKING_BUDGET = 0
-DEFAULT_EFFORT = "xhigh"  # unused when thinking_budget=0; kept for callers
+DEFAULT_EFFORT = "xhigh"
 MAX_LOOP_ITERATIONS = 8
 PROMPT_PATH = Path(__file__).parent / "prompts" / "drafter.md"
 
-# Refusal reasons the Drafter is allowed to emit. Anything else in the
-# `refuse` branch is treated as malformed and collapsed to
-# CITATIONS_UNVERIFIABLE (see module docstring, point 2).
+# Refusal reasons the Drafter is allowed to emit. Anything else in the `refuse`
+# branch is treated as malformed and collapsed to CITATIONS_UNVERIFIABLE.
 _DRAFTER_REFUSAL_REASONS: frozenset[str] = frozenset(
     {
         RefusalReason.CORPUS_SILENT.value,
@@ -101,26 +78,15 @@ def _load_system_prompt() -> str:
 
 
 class _AnthropicLike(Protocol):
-    """Minimal shape of the Anthropic SDK client we depend on.
-
-    Same seam as `HaikuNormalizer`: tests inject a fake, production builds
-    a real `anthropic.Anthropic` via `_build_client`.
-    """
+    """Minimal shape of the Anthropic SDK client used by this agent."""
 
     messages: Any
 
 
 def _build_client(api_key: str) -> _AnthropicLike:
-    """Factory for the real Anthropic client. Local import to avoid
-    loading the SDK when tests inject a fake."""
     from anthropic import Anthropic
 
     return Anthropic(api_key=api_key)
-
-
-# ---------------------------------------------------------------------------
-# Tool schemas (hand-written, kept compact; Claude handles loose schemas well)
-# ---------------------------------------------------------------------------
 
 
 _SEARCH_GUIDELINES_SCHEMA: dict[str, Any] = {
@@ -192,9 +158,7 @@ _ANSWER_SCHEMA: dict[str, Any] = {
         "prose from the streamed text block."
     ),
     "properties": {
-        # `content` kept as an optional legacy field so older prompts /
-        # rolling deployments still work; when provided, we prefer it
-        # over the text-block buffer. See OpusDrafter.run().
+        # `content`, if provided, wins over the streamed text block.
         "content": {"type": "string"},
         "claims": {"type": "array", "items": _CLAIM_SCHEMA},
         "citations": {"type": "array", "items": _CITATION_SCHEMA},
@@ -278,14 +242,8 @@ def _tool_specs() -> list[dict[str, Any]]:
     ]
 
 
-# ---------------------------------------------------------------------------
-# Serialization — compact, LLM-friendly prompt blocks
-# ---------------------------------------------------------------------------
-
-
 def _render_chunk(chunk: Chunk) -> str:
     key = f"{chunk.doc_id}:p{chunk.page}:{chunk.section_slug}"
-    # Whitespace-normalize the text so the prompt stays compact.
     body = " ".join(chunk.text.split())
     return (
         f'<chunk id="{key}" year="{chunk.year}" source="{chunk.source_type}" '
@@ -340,16 +298,8 @@ def _build_initial_user_message(
     return "\n\n".join(parts)
 
 
-# ---------------------------------------------------------------------------
-# Response parsing helpers
-# ---------------------------------------------------------------------------
-
-
 def _extract_usage(response: Any) -> tuple[int, int, int]:
-    """Pull (input, output, thinking) token counts from a Messages response.
-
-    Supports both real SDK objects and dict-shaped fakes.
-    """
+    """Pull (input, output, thinking) token counts from a Messages response."""
     usage = getattr(response, "usage", None)
     if isinstance(usage, dict):
         return (
@@ -385,8 +335,6 @@ def _parse_filter_hints(raw: Any) -> RetrievalFilters:
         return RetrievalFilters()
     if not isinstance(raw, dict):
         return RetrievalFilters()
-    # Drop keys the filter model doesn't know about; let Pydantic enforce
-    # types on the rest. Unknown source types fall through validation.
     allowed = {
         "doc_ids",
         "source_types",
@@ -409,26 +357,18 @@ def _parse_submit_input(
 ) -> DrafterResult | None:
     """Parse a `submit_decision` tool input into a DrafterResult.
 
-    `streamed_text` is the accumulated text block the Drafter emitted
-    BEFORE the tool call — used as `content` when the tool input
-    doesn't include one (the new prompt contract). Legacy payloads
-    that do include `content` inside the tool win, so rolling updates
-    work either way.
+    `streamed_text` is the text block emitted before the tool call; used as
+    `content` when the payload omits it. Explicit `content` wins.
 
-    Returns None if the input is malformed — caller will refuse with
-    CITATIONS_UNVERIFIABLE.
+    Returns None on malformed input — caller refuses with CITATIONS_UNVERIFIABLE.
     """
     decision = tool_input.get("decision")
     if decision == "answer":
         answer_payload = tool_input.get("answer")
         if not isinstance(answer_payload, dict):
             return None
-        # Prefer the explicit content field if the model still sends it
-        # (older prompts / rollback safety). Fall back to the text block
-        # the Drafter streamed before calling the tool.
         content = str(answer_payload.get("content") or streamed_text or "").strip()
         if not content:
-            # No prose anywhere — can't verify a blank answer.
             return None
         try:
             claims = [Claim(**c) for c in answer_payload.get("claims", [])]
@@ -456,21 +396,12 @@ def _parse_submit_input(
     return None
 
 
-# ---------------------------------------------------------------------------
-# OpusDrafter
-# ---------------------------------------------------------------------------
-
-
 class OpusDrafter:
     """Drafter backed by Claude Opus 4.7 with adaptive thinking.
 
-    Runs an Anthropic tool-use loop over up to `MAX_LOOP_ITERATIONS`
-    iterations. Returns one of `DrafterAnswerDecision`,
-    `DrafterNeedMoreRetrieval`, or `DrafterRefuse`.
-
-    Constructor accepts either an `anthropic_client` (for tests) or an
-    `api_key` (production); the latter triggers a lazy import of the
-    Anthropic SDK.
+    Runs an Anthropic tool-use loop up to `MAX_LOOP_ITERATIONS` iterations and
+    returns a `DrafterAnswerDecision`, `DrafterNeedMoreRetrieval`, or
+    `DrafterRefuse`.
     """
 
     def __init__(
@@ -504,8 +435,6 @@ class OpusDrafter:
         self.effort = effort
         self.last_usage: dict[str, Any] | None = None
 
-    # ---------------------------------------------------------------- run
-
     async def run(
         self,
         state: QueryState,
@@ -514,8 +443,6 @@ class OpusDrafter:
     ) -> DrafterResult:
         nq = state.normalized_query
         if nq is None:
-            # Should never happen — orchestrator guards this — but refuse
-            # loudly rather than index into None.
             log.warning("drafter.missing_normalized_query", query_id=state.query_id)
             return DrafterRefuse(reason=RefusalReason.CITATIONS_UNVERIFIABLE)
 
@@ -533,11 +460,10 @@ class OpusDrafter:
         ]
 
         tools = _tool_specs()
-        # Cache-shape: mark the system block for ephemeral caching. Tools
-        # render in front of system in the Anthropic prefix, so a cache_control
-        # on system covers tools + system together — ~10x cost reduction on
-        # cache reads within the 5-minute TTL. Opus 4.7 cache minimum is 4096
-        # tokens; our system + tools clear that threshold.
+        # `cache_control` on the system block covers tools+system together
+        # (tools render in front of system in the prefix) — ~10x cost cut on
+        # cache hits within the 5min TTL. System+tools clear the 4096-token
+        # Opus 4.7 cache minimum.
         system_blocks = [
             {
                 "type": "text",
@@ -551,10 +477,8 @@ class OpusDrafter:
             "system": system_blocks,
             "tools": tools,
         }
-        # Opus 4.7: adaptive thinking only. `budget_tokens` / `enabled`
-        # returns 400 on this model. `output_config.effort` tuning: xhigh
-        # is safest/slowest, high is ~40-60% faster with a small quality
-        # delta for structured tool-use loops.
+        # Opus 4.7 supports only adaptive thinking; `budget_tokens` / `enabled`
+        # returns HTTP 400.
         if self.thinking_budget > 0:
             kwargs_base["thinking"] = {"type": "adaptive"}
             kwargs_base["output_config"] = {"effort": self.effort}
@@ -563,9 +487,8 @@ class OpusDrafter:
         started = time.perf_counter()
         decision: DrafterResult | None = None
 
-        # Per-retriever state: each intra-drafter search increments the
-        # attempt_num we hand to the Retriever but does NOT mutate
-        # state.retrieval_attempts. See module docstring, point 1.
+        # Intra-drafter searches increment attempt_num but do NOT mutate
+        # state.retrieval_attempts — the orchestrator owns that budget.
         base_attempt_num = (
             latest.attempt_num if latest is not None else 0
         )
@@ -575,8 +498,7 @@ class OpusDrafter:
         while iterations < MAX_LOOP_ITERATIONS:
             iterations += 1
 
-            # Heartbeat: Drafter turns can take 30-90s each under xhigh
-            # effort. Emit a trace event before each LLM call so the UI
+            # Heartbeat: xhigh turns run 30-90s each; emit a trace so the UI
             # knows the phase is alive.
             state.append_trace(
                 trace(
@@ -586,12 +508,8 @@ class OpusDrafter:
                 )
             )
 
-            # Stream the response so text_delta events land as trace
-            # events in real time. The new prompt contract asks the
-            # Drafter to emit the full Bahasa answer as a text block
-            # BEFORE calling submit_decision, which lets the SSE pump
-            # forward each token to the UI as it's written — user sees
-            # the answer composed live instead of waiting 60s blank.
+            # Prompt contract: Drafter emits the full Bahasa answer as a text
+            # block BEFORE submit_decision, enabling live composition in UI.
             response, streamed_text = await self._stream_once(
                 messages=list(messages),
                 kwargs_base=kwargs_base,
@@ -611,7 +529,6 @@ class OpusDrafter:
             content_blocks = _iter_content_blocks(response)
 
             if stop_reason != "tool_use":
-                # Claude ended without submitting. See module docstring, point 2.
                 log.warning(
                     "drafter.no_tool_call",
                     iteration=iterations,
@@ -621,7 +538,6 @@ class OpusDrafter:
                 decision = DrafterRefuse(reason=RefusalReason.CITATIONS_UNVERIFIABLE)
                 break
 
-            # Append the assistant turn verbatim so tool_use_id refs line up.
             messages.append({"role": "assistant", "content": content_blocks})
 
             tool_results: list[dict[str, Any]] = []
@@ -657,9 +573,8 @@ class OpusDrafter:
                         iteration=iterations,
                         decision=tool_input.get("decision"),
                     )
-                    break  # stop processing further blocks; loop exits
+                    break
 
-                # Helper tool dispatch.
                 if tool_name == "search_guidelines":
                     intra_retrieval_calls += 1
                     result_payload = await self._dispatch_search(
@@ -726,8 +641,6 @@ class OpusDrafter:
                 break
 
             if not tool_results:
-                # stop_reason was tool_use but no usable tool_use blocks
-                # — treat as malformed.
                 log.warning(
                     "drafter.empty_tool_use",
                     iteration=iterations,
@@ -739,7 +652,6 @@ class OpusDrafter:
             messages.append({"role": "user", "content": tool_results})
 
         if decision is None:
-            # Loop cap exceeded without submission.
             log.warning(
                 "drafter.loop_cap_exceeded",
                 iterations=iterations,
@@ -770,8 +682,6 @@ class OpusDrafter:
         )
         return decision
 
-    # ----------------------------------------------------------- streaming
-
     async def _stream_once(
         self,
         *,
@@ -782,34 +692,23 @@ class OpusDrafter:
     ) -> tuple[Any, str]:
         """Single Anthropic messages.stream() turn.
 
-        Side effect: emits a `drafter.text_delta` trace event for each
-        text chunk as it streams, so the SSE pump forwards tokens to
-        the UI in real time. Also emits a terminal `drafter.text_done`
-        event with the full assembled text so UI layers that cache
-        events can lock in the final content.
-
-        Returns `(final_message, streamed_text)` — final_message has
-        the same shape messages.create returns (usage, stop_reason,
-        content blocks with tool inputs populated), so the existing
-        tool-use dispatch loop downstream doesn't need any changes.
+        Emits `drafter.text_delta` traces per streamed chunk and a terminal
+        `drafter.text_done` so the SSE pump forwards tokens live. Returns
+        `(final_message, streamed_text)` — `final_message` has the same shape
+        as `messages.create` returns.
         """
         text_buffer: list[str] = []
 
-        # Some fake-client paths in tests don't implement `.stream()`.
-        # Fall back to `.create()` in that case so unit tests keep working.
+        # Fallback to `.create()` for test fakes that don't implement `.stream()`.
         messages_api = self._client.messages
         stream_method = getattr(messages_api, "stream", None)
         if stream_method is None:
             response = messages_api.create(messages=messages, **kwargs_base)
             return response, ""
 
-        # Anthropic's sync SDK would block the event loop end-to-end —
-        # the SSE pump watching state.trace_events wouldn't get a chance
-        # to forward deltas to the browser until the stream was done.
-        # We push the whole sync stream onto a worker thread. The thread
-        # still mutates state.trace_events directly (append is atomic
-        # under the GIL) so the main loop's poller sees deltas land in
-        # real time.
+        # Push the sync SDK stream onto a worker thread so it doesn't block the
+        # event loop end-to-end. Appends to state.trace_events from the thread
+        # are safe (atomic under GIL); the main-loop poller sees deltas live.
         def _run_stream() -> tuple[Any, str]:
             with stream_method(messages=messages, **kwargs_base) as stream:
                 for event in stream:
@@ -849,8 +748,6 @@ class OpusDrafter:
             )
         return final_message, streamed_text
 
-    # ----------------------------------------------------------- dispatchers
-
     async def _dispatch_search(
         self,
         *,
@@ -860,9 +757,9 @@ class OpusDrafter:
     ) -> dict[str, Any]:
         """Run a narrower retrieval inside the drafter's tool-use loop.
 
-        We build a `NormalizedQuery` with the Claude-supplied `query` string
-        substituted into `structured_query`; all other fields are inherited
-        from the original query so downstream filters still make sense.
+        Builds a `NormalizedQuery` with Claude's `query` string in
+        `structured_query`; other fields inherit from the original query so
+        downstream filters still make sense.
         """
         query_text = str(tool_input.get("query") or nq.structured_query)
         filters = _parse_filter_hints(tool_input.get("filters"))
@@ -901,9 +798,8 @@ class OpusDrafter:
     ) -> dict[str, Any]:
         """Delegate to `retriever.get_full_section` if present.
 
-        `LocalRetriever` exposes this method; the test `FakeRetriever` does
-        not. Return an error structure rather than raising so Claude can
-        continue the loop.
+        Returns an error struct (not an exception) so Claude can continue the
+        loop.
         """
         fn = getattr(self.retriever, "get_full_section", None)
         if not callable(fn):
@@ -919,8 +815,6 @@ class OpusDrafter:
                 str(tool_input.get("section_path", "")),
             )
         except Exception as exc:
-            # Surface the failure to Claude rather than crashing the loop —
-            # helper tools are best-effort.
             return {"error": f"get_full_section failed: {exc}"}
         if isinstance(result, dict):
             return result

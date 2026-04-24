@@ -180,7 +180,6 @@ def main() -> int:
     checks = run(args.base)
     total_ms = int((time.perf_counter() - t0) * 1000)
 
-    # Print table.
     max_name = max(len(c.name) for c in checks) + 2
     if not args.quiet:
         print(f"Smoke-testing {args.base}")

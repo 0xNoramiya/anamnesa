@@ -8,25 +8,19 @@ but will 504 on /api/query until backend returns.
 
 from __future__ import annotations
 
-from scripts.deploy_helper import ssh, run
+from scripts.deploy_helper import run, ssh
 
 
 def main() -> None:
     c = ssh()
     try:
-        # 1. Resync the working tree to origin/main. Prod's tree has
-        # uncommitted files from our earlier scp deploys that are
-        # identical to what just landed on origin — reset --hard is
-        # safe and easier than reconciling.
         run(c, "cd /opt/anamnesa && git fetch origin main")
         run(c, "cd /opt/anamnesa && git reset --hard origin/main")
         run(c, "cd /opt/anamnesa && git log -1 --oneline")
 
-        # 2. Stop backend so it doesn't read a half-rebuilt index.
+        # Stop backend so it doesn't read a half-rebuilt index.
         run(c, "systemctl stop anamnesa-backend")
 
-        # 3. Rebuild the LanceDB + BM25 index. --yes skips the
-        # drop-existing confirmation prompt. Embedder read from .env.
         run(
             c,
             "cd /opt/anamnesa && "
@@ -35,7 +29,6 @@ def main() -> None:
             timeout=1800,
         )
 
-        # 4. Bring backend back, warm up, smoke-check.
         run(c, "systemctl start anamnesa-backend")
         run(c, "sleep 15 && systemctl is-active anamnesa-backend")
         run(

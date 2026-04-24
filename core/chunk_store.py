@@ -111,14 +111,11 @@ def _escape_sql(value: str) -> str:
 
 
 def _list_table_names(db: DBConnection) -> list[str]:
-    """LanceDB's `list_tables()` returns a response object in newer versions
-    and a plain list in older ones. Normalize to list[str]."""
+    """Normalize LanceDB `list_tables()` across versions (object-with-.tables vs. iterable)."""
     result = db.list_tables()
-    # Newer API: object with a `.tables` attribute.
     tables_attr = getattr(result, "tables", None)
     if tables_attr is not None:
         return [str(t) for t in tables_attr]
-    # Older API or iterable of strings.
     try:
         return [str(t) for t in result]  # type: ignore[arg-type]
     except TypeError:
@@ -135,8 +132,6 @@ class LanceChunkStore:
         self._table: Table | None = None
         if TABLE_NAME in _list_table_names(self._db):
             self._table = self._db.open_table(TABLE_NAME)
-
-    # -- public API -------------------------------------------------------
 
     @property
     def db_path(self) -> Path:
@@ -162,7 +157,6 @@ class LanceChunkStore:
             log.info("chunk_store.created", path=str(self._db_path), rows=len(rows))
             return
 
-        # Delete existing rows with the same row_key, then add.
         keys = {str(r["row_key"]) for r in rows}
         if keys:
             quoted = ", ".join(f"'{_escape_sql(k)}'" for k in keys)
@@ -218,8 +212,6 @@ class LanceChunkStore:
             row["_score"] = score
             out.append(_chunk_from_row(row))
         return out
-
-    # -- introspection ---------------------------------------------------
 
     @property
     def vector_dim(self) -> int | None:

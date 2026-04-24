@@ -19,10 +19,6 @@ from agents.normalizer import HaikuNormalizer
 from core.refusals import RefusalReason
 from core.state import NormalizedQuery, QueryState
 
-# ---------------------------------------------------------------------------
-# Fake Anthropic client — mimics the duck-typed surface we rely on
-# ---------------------------------------------------------------------------
-
 
 @dataclass
 class _FakeTextBlock:
@@ -94,11 +90,6 @@ def _state(query: str) -> QueryState:
     return QueryState(original_query=query)
 
 
-# ---------------------------------------------------------------------------
-# 1. Happy path
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.asyncio
 async def test_happy_path_returns_normalized_query_with_expected_fields() -> None:
     scripted = json.dumps(
@@ -127,17 +118,11 @@ async def test_happy_path_returns_normalized_query_with_expected_fields() -> Non
     assert "dengue" in result.keywords_en
     assert "Tatalaksana" in result.structured_query  # Bahasa preserved
 
-    # Call went through with the right model + single user turn.
     [call] = client.messages.calls
     assert call["model"] == "claude-haiku-4-5-20251001"
     assert call["max_tokens"] == 800
     assert call["system"] == "SYSTEM_PROMPT_STUB"
     assert call["messages"][0]["role"] == "user"
-
-
-# ---------------------------------------------------------------------------
-# 2. Out-of-scope refusal
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -152,11 +137,6 @@ async def test_out_of_scope_query_returns_out_of_medical_scope_refusal() -> None
     assert result.reason == RefusalReason.OUT_OF_MEDICAL_SCOPE
 
 
-# ---------------------------------------------------------------------------
-# 3. Patient-specific refusal
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.asyncio
 async def test_patient_specific_query_returns_patient_specific_refusal() -> None:
     scripted = json.dumps({"action": "refuse", "reason": "patient_specific_request"})
@@ -169,11 +149,6 @@ async def test_patient_specific_query_returns_patient_specific_refusal() -> None
 
     assert isinstance(result, NormalizerRefusal)
     assert result.reason == RefusalReason.PATIENT_SPECIFIC_REQUEST
-
-
-# ---------------------------------------------------------------------------
-# 4. Malformed model response → NORMALIZER_MALFORMED refusal
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -231,11 +206,6 @@ async def test_refusal_with_unknown_reason_yields_malformed() -> None:
     assert result.reason == RefusalReason.NORMALIZER_MALFORMED
 
 
-# ---------------------------------------------------------------------------
-# 5. Transport-level exception propagates
-# ---------------------------------------------------------------------------
-
-
 class _BoomAPIError(Exception):
     """Stand-in for an Anthropic transport failure."""
 
@@ -247,11 +217,6 @@ async def test_anthropic_client_exception_propagates_not_swallowed() -> None:
 
     with pytest.raises(_BoomAPIError, match="connection reset"):
         await normalizer.run(_state("DBD anak"))
-
-
-# ---------------------------------------------------------------------------
-# 6. Token accounting via `last_usage`
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -295,11 +260,6 @@ async def test_last_usage_populated_even_when_malformed() -> None:
         "output_tokens": 5,
         "model_id": "claude-haiku-4-5-20251001",
     }
-
-
-# ---------------------------------------------------------------------------
-# Constructor guard
-# ---------------------------------------------------------------------------
 
 
 def test_constructor_requires_either_client_or_api_key() -> None:

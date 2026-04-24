@@ -128,13 +128,12 @@ def reindex(
         log.info("reindex.declined")
         return -1
 
-    # 1. Drop the existing LanceDB directory so the new embedder's dim wins.
+    # Drop the existing LanceDB directory so the new embedder's dim wins.
     if lance_path.exists():
         log.info("reindex.dropping_lance", path=str(lance_path))
         shutil.rmtree(lance_path)
 
-    # 2. Build embedder. This is where `bge-m3` triggers the ~2GB download
-    #    on first invocation; `hash` is free.
+    # `bge-m3` triggers a ~2GB download on first invocation; `hash` is free.
     try:
         embedder = build_embedder(embedder_name)
     except Exception as exc:
@@ -142,7 +141,6 @@ def reindex(
         print(f"Failed to build embedder {embedder_name!r}: {exc}", file=sys.stderr)
         return 1
 
-    # 3. Embed all chunks in batches.
     try:
         vectors = _embed_in_batches(
             embedder, [c.text for c in all_chunks], batch_size=batch_size
@@ -157,7 +155,6 @@ def reindex(
             )
         raise
 
-    # 4. Upsert into a fresh LanceChunkStore.
     store = LanceChunkStore(db_path=lance_path)
     stored = [
         StoredChunk(chunk=c, vector=vec)
@@ -165,7 +162,6 @@ def reindex(
     ]
     store.upsert(stored)
 
-    # 5. Rebuild BM25 sidecar.
     r = HybridRetriever(store=store, embedder=embedder, bm25_path=bm25_path)
     r.rebuild_bm25_from_store()
     r.save_bm25()

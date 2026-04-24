@@ -30,10 +30,6 @@ from core.state import (
 )
 from tests.fakes import FakeRetriever, make_chunk, make_normalized
 
-# ---------------------------------------------------------------------------
-# Fake Anthropic Messages API
-# ---------------------------------------------------------------------------
-
 
 @dataclass
 class _FakeTextBlock:
@@ -87,11 +83,6 @@ class _FakeMessages:
 @dataclass
 class FakeAnthropic:
     messages: _FakeMessages
-
-
-# ---------------------------------------------------------------------------
-# Helpers to build responses quickly
-# ---------------------------------------------------------------------------
 
 
 def _tool_use_response(
@@ -189,11 +180,6 @@ def _state_with_chunks() -> QueryState:
     return state
 
 
-# ---------------------------------------------------------------------------
-# 1. Happy path — Claude submits an answer immediately.
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.asyncio
 async def test_happy_path_answer_decision() -> None:
     client = FakeAnthropic(
@@ -222,7 +208,6 @@ async def test_happy_path_answer_decision() -> None:
     assert (
         result.answer.citations[0].key == "PPK-FKTP-2015:p412:dbd_tata_laksana"
     )
-    # Single Anthropic call
     assert len(client.messages.calls) == 1
     call = client.messages.calls[0]
     assert call["model"] == "claude-opus-4-7"
@@ -234,20 +219,13 @@ async def test_happy_path_answer_decision() -> None:
             "cache_control": {"type": "ephemeral"},
         }
     ]
-    # Three tools registered
     assert {t["name"] for t in call["tools"]} == {
         "search_guidelines",
         "get_full_section",
         "submit_decision",
     }
-    # Thinking uses Opus 4.7's adaptive mode with xhigh effort.
     assert call["thinking"] == {"type": "adaptive"}
     assert call["output_config"] == {"effort": "xhigh"}
-
-
-# ---------------------------------------------------------------------------
-# 2. Need-more-retrieval — filter_hints round-trip through RetrievalFilters.
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -285,11 +263,6 @@ async def test_need_more_retrieval_decision_with_filter_hints() -> None:
     assert result.filter_hints.top_k == 15
 
 
-# ---------------------------------------------------------------------------
-# 3. Refuse with `corpus_silent`.
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.asyncio
 async def test_refuse_corpus_silent_decision() -> None:
     client = FakeAnthropic(
@@ -314,18 +287,11 @@ async def test_refuse_corpus_silent_decision() -> None:
     assert result.reason is RefusalReason.CORPUS_SILENT
 
 
-# ---------------------------------------------------------------------------
-# 4. Tool-use loop — search_guidelines → then submit_decision.
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.asyncio
 async def test_search_guidelines_then_submit_decision() -> None:
-    # Second retriever call returns a different chunk so we can see the
-    # search tool actually fired.
     retriever = FakeRetriever(
         script=[
-            [make_chunk(page=413)],  # what search_guidelines returns
+            [make_chunk(page=413)],
         ]
     )
     client = FakeAnthropic(
@@ -356,28 +322,19 @@ async def test_search_guidelines_then_submit_decision() -> None:
     result = await drafter.run(_state_with_chunks())
 
     assert isinstance(result, DrafterAnswerDecision)
-    # Retriever called exactly once (the intra-drafter search).
     assert len(retriever.calls) == 1
-    # Filters round-tripped into a RetrievalFilters instance.
     called_filters = retriever.calls[0]
     assert called_filters.conditions == ["dengue"]
     assert called_filters.source_types == ["ppk_fktp"]
     assert called_filters.top_k == 5
 
-    # Two Anthropic calls — second carries the tool_result from the first.
     assert len(client.messages.calls) == 2
     second_call = client.messages.calls[1]
-    # Last message is the tool_result user turn with tool_use_id=s1.
     last_msg = second_call["messages"][-1]
     assert last_msg["role"] == "user"
     block = last_msg["content"][0]
     assert block["type"] == "tool_result"
     assert block["tool_use_id"] == "s1"
-
-
-# ---------------------------------------------------------------------------
-# 5. Verifier feedback injected into initial user message.
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -402,18 +359,11 @@ async def test_verifier_feedback_rendered_in_initial_user_message() -> None:
     first_user_msg = call["messages"][0]
     assert first_user_msg["role"] == "user"
     content = first_user_msg["content"]
-    # content is a string for the initial user turn.
     assert "<verifier_feedback>" in content
     assert feedback in content
     assert "RETRY" in content
-    # Also contains the normalized query and chunks.
     assert "<normalized_query>" in content
     assert "<chunks>" in content
-
-
-# ---------------------------------------------------------------------------
-# 6. Loop cap — Claude never submits → refuse with CITATIONS_UNVERIFIABLE.
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -436,13 +386,7 @@ async def test_loop_cap_exceeded_triggers_citations_unverifiable_refusal() -> No
 
     assert isinstance(result, DrafterRefuse)
     assert result.reason is RefusalReason.CITATIONS_UNVERIFIABLE
-    # Exactly MAX_LOOP_ITERATIONS calls to Anthropic.
     assert len(client.messages.calls) == 8
-
-
-# ---------------------------------------------------------------------------
-# 7. Malformed submit_decision input → refuse with CITATIONS_UNVERIFIABLE.
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -508,11 +452,6 @@ async def test_claude_ends_turn_without_submission_triggers_refusal() -> None:
     assert result.reason is RefusalReason.CITATIONS_UNVERIFIABLE
 
 
-# ---------------------------------------------------------------------------
-# 8. Usage accounting — last_usage populated across the loop.
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.asyncio
 async def test_last_usage_populated_after_happy_path() -> None:
     client = FakeAnthropic(
@@ -576,11 +515,6 @@ async def test_last_usage_accumulates_across_tool_use_loop() -> None:
     assert drafter.last_usage["thinking_tokens"] == 65
 
 
-# ---------------------------------------------------------------------------
-# 9. Transport errors propagate (no swallowing).
-# ---------------------------------------------------------------------------
-
-
 class _BoomAPIError(Exception):
     """Stand-in for an Anthropic transport failure."""
 
@@ -592,11 +526,6 @@ async def test_transport_error_propagates() -> None:
 
     with pytest.raises(_BoomAPIError, match="connection reset"):
         await drafter.run(_state_with_chunks())
-
-
-# ---------------------------------------------------------------------------
-# 10. Integration — OpusDrafter + real Orchestrator + fake Anthropic.
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -643,20 +572,10 @@ async def test_orchestrator_integration_with_opus_drafter() -> None:
     assert len(state.retrieval_attempts) == 1
 
 
-# ---------------------------------------------------------------------------
-# Constructor guard
-# ---------------------------------------------------------------------------
-
-
 def test_constructor_requires_either_client_or_api_key() -> None:
     retriever = FakeRetriever(script=[[]])
     with pytest.raises(ValueError, match="anthropic_client"):
         OpusDrafter(retriever=retriever, system_prompt="stub")
-
-
-# ---------------------------------------------------------------------------
-# Thinking budget = 0 → no `thinking` key passed to the SDK.
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio

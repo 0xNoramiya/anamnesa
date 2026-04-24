@@ -49,17 +49,11 @@ class AppendResult:
     action: Literal["inserted", "updated"]
 
 
-# ---------------------------------------------------------------------------
-# Lock + atomic write primitives
-# ---------------------------------------------------------------------------
-
-
 @contextmanager
 def _exclusive_lock(manifest_path: Path):  # type: ignore[no-untyped-def]
     """Hold an exclusive flock on a sibling lockfile for the duration."""
     manifest_path.parent.mkdir(parents=True, exist_ok=True)
     lock_path = manifest_path.with_name(manifest_path.name + ".lock")
-    # Ensure lockfile exists before opening O_RDWR.
     lock_path.touch(exist_ok=True)
     fd = os.open(str(lock_path), os.O_RDWR)
     try:
@@ -95,19 +89,14 @@ def _atomic_write(manifest_path: Path, manifest: Manifest) -> None:
             os.fsync(f.fileno())
         os.replace(tmp_name, manifest_path)
     except BaseException:
-        # On ANY failure before rename succeeds, remove the temp file so we
-        # don't leak a half-written artifact in the manifest directory.
+        # Remove the temp file on any failure before rename so we don't leak
+        # a half-written artifact in the manifest directory.
         if os.path.exists(tmp_name):
             try:
                 os.unlink(tmp_name)
             except OSError:
                 pass
         raise
-
-
-# ---------------------------------------------------------------------------
-# Public API
-# ---------------------------------------------------------------------------
 
 
 def append_record(record: ManifestRecord, manifest_path: Path) -> AppendResult:
@@ -131,11 +120,6 @@ def append_record(record: ManifestRecord, manifest_path: Path) -> AppendResult:
             total=len(manifest.documents),
         )
         return AppendResult(doc_id=record.doc_id, action=action)
-
-
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
 
 
 def _cli(argv: list[str] | None = None) -> int:

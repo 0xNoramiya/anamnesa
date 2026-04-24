@@ -20,11 +20,11 @@ from pydantic import BaseModel, ConfigDict, Field
 from core.state import SourceType
 
 DocStatus = Literal[
-    "discovered",   # URL known, not yet fetched
-    "downloaded",   # PDF in catalog/cache, sha256 computed
-    "ingested",     # parsed into catalog/processed/{source}/*.json
-    "indexed",      # chunks live in index/lance + bm25
-    "failed",       # a processing step failed; see `notes`
+    "discovered",
+    "downloaded",
+    "ingested",
+    "indexed",
+    "failed",
 ]
 
 
@@ -33,7 +33,6 @@ class ManifestRecord(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    # --- identity ---
     doc_id: str = Field(
         description=(
             "Stable, human-readable id. Convention: "
@@ -42,32 +41,27 @@ class ManifestRecord(BaseModel):
         ),
     )
     source_type: SourceType
-    title: str                                   # Bahasa Indonesia title
-    year: int                                    # source year
+    title: str
+    year: int
     authority: str = "Kemenkes RI"
 
-    # --- legal (always Pasal 42 for hackathon scope) ---
     legal_basis: str = "UU No. 28/2014 Pasal 42"
-    kepmenkes_number: str | None = None          # e.g. "HK.02.02/MENKES/514/2015"
+    kepmenkes_number: str | None = None
 
-    # --- physical document ---
-    source_url: str                              # original download URL
-    cache_path: str | None = None                # e.g. "catalog/cache/pnpk/dengue-2020.pdf"
-    sha256: str | None = None                    # 64 hex chars
+    source_url: str
+    cache_path: str | None = None
+    sha256: str | None = None
     file_size_bytes: int | None = None
     pages: int | None = None
     language: str = "id"
 
-    # --- pipeline state ---
     status: DocStatus = "discovered"
 
-    # --- supersession graph ---
     supersedes: list[str] = Field(default_factory=list)
     superseded_by: list[str] = Field(default_factory=list)
 
-    # --- provenance ---
     discovered_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
-    discovered_by: str = "manual"                # crawler sub-agent id or "manual"
+    discovered_by: str = "manual"
     notes: str = ""
 
 

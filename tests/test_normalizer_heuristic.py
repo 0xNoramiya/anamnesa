@@ -12,11 +12,6 @@ from __future__ import annotations
 from agents.normalizer import _is_obviously_non_medical
 
 
-# ---------------------------------------------------------------------------
-# Should short-circuit (unambiguously non-medical)
-# ---------------------------------------------------------------------------
-
-
 def test_joke_request_refuses() -> None:
     assert _is_obviously_non_medical("Tell me a joke") is True
 
@@ -51,11 +46,6 @@ def test_sales_tips_refuses() -> None:
 
 def test_numeric_only_refuses() -> None:
     assert _is_obviously_non_medical("12345") is True
-
-
-# ---------------------------------------------------------------------------
-# Should NOT short-circuit — let Haiku decide
-# ---------------------------------------------------------------------------
 
 
 def test_dbd_query_goes_to_haiku() -> None:

@@ -71,11 +71,6 @@ VISION_SYSTEM_PROMPT = (
 )
 
 
-# ---------------------------------------------------------------------------
-# Public types
-# ---------------------------------------------------------------------------
-
-
 class PageSource(StrEnum):
     TEXT = "text"
     VISION = "vision"
@@ -123,9 +118,7 @@ class ExtractionResult(BaseModel):
     report: ExtractionReport
 
 
-# ---------------------------------------------------------------------------
 # Anthropic client seam — tests monkeypatch this to avoid real API calls.
-# ---------------------------------------------------------------------------
 
 
 class _AnthropicClient(Protocol):
@@ -134,14 +127,9 @@ class _AnthropicClient(Protocol):
 
 def _anthropic_client_factory(api_key: str) -> _AnthropicClient:
     """Build a real Anthropic client. Tests monkeypatch this symbol."""
-    import anthropic  # local import: keep import-time side effects out of module load
+    import anthropic
 
     return anthropic.Anthropic(api_key=api_key)
-
-
-# ---------------------------------------------------------------------------
-# Routing
-# ---------------------------------------------------------------------------
 
 
 def _non_whitespace_len(s: str) -> int:
@@ -188,11 +176,6 @@ def route(pdf_path: Path, *, text_threshold_chars_per_page: int = 250) -> Extrac
     )
 
 
-# ---------------------------------------------------------------------------
-# Text path (pdfplumber)
-# ---------------------------------------------------------------------------
-
-
 def extract_text(pdf_path: Path, pages: Sequence[int] | None = None) -> list[PageText]:
     """pdfplumber fast path. Returns `PageText` per requested page.
 
@@ -223,11 +206,6 @@ def extract_text(pdf_path: Path, pages: Sequence[int] | None = None) -> list[Pag
                 chars=len(text),
             )
     return out
-
-
-# ---------------------------------------------------------------------------
-# Vision path (PyMuPDF render + Anthropic messages API)
-# ---------------------------------------------------------------------------
 
 
 def _render_page_png(pdf_path: Path, page_num: int, dpi: int) -> bytes:
@@ -366,11 +344,6 @@ def extract_vision(
     return out
 
 
-# ---------------------------------------------------------------------------
-# Top-level orchestrator
-# ---------------------------------------------------------------------------
-
-
 def extract(
     pdf_path: Path,
     *,
@@ -424,11 +397,6 @@ def extract(
         vision_cost_tokens_est=report.vision_cost_tokens_est,
     )
     return ExtractionResult(pages=merged, report=report)
-
-
-# ---------------------------------------------------------------------------
-# Errors
-# ---------------------------------------------------------------------------
 
 
 class PdfVisionError(RuntimeError):

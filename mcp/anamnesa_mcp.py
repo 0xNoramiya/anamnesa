@@ -35,22 +35,15 @@ from core.state import Chunk, NormalizedQuery, RetrievalFilters
 
 log = structlog.get_logger("anamnesa.mcp")
 
-# ---------------------------------------------------------------------------
-# Load the installed MCP SDK despite our local `mcp/` package shadowing it.
-# ---------------------------------------------------------------------------
-
 
 def _load_mcp_sdk() -> ModuleType:
     """Return the installed `mcp` SDK as a module (not our local package).
 
-    Strategy: find the `mcp` distribution's __init__.py inside site-packages,
-    load it under the same import name, and also prime the submodules we
-    need (`mcp.server.fastmcp`, `mcp.server.stdio`). Callers can then do
-    `sdk.server.fastmcp.FastMCP` without the shadow getting in the way.
+    Finds the `mcp` distribution's __init__.py inside site-packages, loads
+    it under the same import name, and primes the submodules we need
+    (`mcp.server.fastmcp`, `mcp.server.stdio`).
     """
-    # Find the real mcp package path. It's the one that sits in a
-    # `site-packages/mcp/__init__.py` — any path containing the sentinel
-    # subdir `server/fastmcp`.
+    # Sentinel subdir `server/fastmcp` identifies the real mcp package path.
     candidate: Path | None = None
     for p in sys.path:
         probe = Path(p) / "mcp" / "server" / "fastmcp" / "__init__.py"
@@ -67,7 +60,6 @@ def _load_mcp_sdk() -> ModuleType:
     # still works after we restore it.
     local_mcp = sys.modules.get("mcp")
 
-    # Build fresh spec pointed at the real init and a search path.
     init_file = candidate / "__init__.py"
     spec = importlib.util.spec_from_file_location(
         "mcp",
@@ -81,7 +73,7 @@ def _load_mcp_sdk() -> ModuleType:
     sys.modules["mcp"] = sdk
     try:
         spec.loader.exec_module(sdk)
-        # Prime the submodules we care about while the SDK owns the name.
+        # Prime submodules while the SDK owns the name.
         importlib.import_module("mcp.server")
         importlib.import_module("mcp.server.fastmcp")
         importlib.import_module("mcp.server.stdio")
@@ -94,10 +86,7 @@ def _load_mcp_sdk() -> ModuleType:
     return sdk
 
 
-# ---------------------------------------------------------------------------
-# Tool schemas — kept as thin wrappers so the SDK handles validation.
-# Each tool name MUST match the names referenced by agents/prompts/*.md.
-# ---------------------------------------------------------------------------
+# Tool names MUST match the names referenced by agents/prompts/*.md.
 
 
 def _chunk_to_dict(c: Chunk) -> dict[str, Any]:
@@ -160,11 +149,6 @@ def build_tool_handlers(
         "get_pdf_page_url": get_pdf_page_url,
         "check_supersession": check_supersession,
     }
-
-
-# ---------------------------------------------------------------------------
-# MCP server entry point
-# ---------------------------------------------------------------------------
 
 
 def build_server(retriever: HybridRetriever | None = None) -> Any:
@@ -238,7 +222,6 @@ def serve() -> None:
 
     server = build_server()
     log.info("mcp.server_starting", tools=4, lance=os.environ.get("LANCE_DB_PATH"))
-    # FastMCP.run dispatches to the right transport given the default args.
     server.run()
 
 

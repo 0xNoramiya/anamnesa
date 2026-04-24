@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from scripts.deploy_helper import ssh, run
+from scripts.deploy_helper import run, ssh
 
 
 def main() -> None:

@@ -164,11 +164,6 @@ def retriever(tmp_path: Path, corpus: list[Chunk], manifest: Path) -> HybridRetr
     return r
 
 
-# ---------------------------------------------------------------------------
-# Core retrieval behavior
-# ---------------------------------------------------------------------------
-
-
 def test_vector_only_search_finds_relevant_chunk(retriever: HybridRetriever) -> None:
     results = retriever.vector_search(
         "DBD derajat II pediatrik terapi cairan",
@@ -195,9 +190,7 @@ def test_hybrid_rrf_combines_vector_and_bm25(retriever: HybridRetriever) -> None
         RetrievalFilters(top_k=5),
     )
     assert hits
-    # The top hit must be one of the DBD-related chunks
     assert hits[0].doc_id in {"ppk-fktp-2015", "pnpk-dengue-2021"}
-    # The retrieval method should be marked hybrid
     assert hits[0].retrieval_method == "hybrid"
 
 
@@ -245,11 +238,6 @@ def test_top_k_respected(retriever: HybridRetriever) -> None:
         RetrievalFilters(top_k=2),
     )
     assert len(hits) <= 2
-
-
-# ---------------------------------------------------------------------------
-# Supporting tools
-# ---------------------------------------------------------------------------
 
 
 def test_get_full_section_returns_matching_chunk(retriever: HybridRetriever) -> None:
@@ -310,11 +298,6 @@ def test_check_supersession_unknown(retriever: HybridRetriever) -> None:
     assert info["source_year"] == 0
 
 
-# ---------------------------------------------------------------------------
-# Retriever protocol adapter
-# ---------------------------------------------------------------------------
-
-
 async def test_search_protocol_returns_retrieval_attempt(
     retriever: HybridRetriever,
 ) -> None:
@@ -328,11 +311,6 @@ async def test_search_protocol_returns_retrieval_attempt(
     assert attempt.attempt_num == 1
     assert attempt.chunks
     assert all(c.retrieval_method == "hybrid" for c in attempt.chunks)
-
-
-# ---------------------------------------------------------------------------
-# BM25 persistence
-# ---------------------------------------------------------------------------
 
 
 def test_bm25_persists_to_disk(
@@ -350,18 +328,12 @@ def test_bm25_persists_to_disk(
     r1.save_bm25()
     assert bm25_path.exists()
 
-    # New instance should load from disk without rebuild.
     r2 = HybridRetriever(
         store=store, embedder=embedder, manifest_path=manifest, bm25_path=bm25_path
     )
     r2.load_bm25()
     hits = r2.bm25_search("OAT kategori", k=2)
     assert hits and hits[0].doc_id == "pnpk-tb-2020"
-
-
-# ---------------------------------------------------------------------------
-# Processed JSON shape (script contract)
-# ---------------------------------------------------------------------------
 
 
 def test_build_index_reads_processed_json(
@@ -389,6 +361,5 @@ def test_build_index_reads_processed_json(
     assert n == 2
     assert bm25_path.exists()
 
-    # Now open the store and confirm chunks landed.
     store = LanceChunkStore(db_path=lance_dir)
     assert len(list(store.iter_chunks())) == 2

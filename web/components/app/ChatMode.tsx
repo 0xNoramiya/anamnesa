@@ -146,14 +146,12 @@ export function ChatMode() {
     }
   }, [stream.final, history]);
 
-  // Auto-scroll to the latest turn when the thread grows.
   useEffect(() => {
     threadEndRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [thread.length]);
 
-  // Persist thread to localStorage whenever it changes. Skip the first
-  // render — the mount-time load effect runs after this one and would
-  // see an empty localStorage if we wrote through on the initial `[]`.
+  // Skip the first render — the mount-time load effect runs after this
+  // one and would see an empty localStorage if we wrote through on `[]`.
   useEffect(() => {
     if (!hydratedRef.current) return;
     savePersistedThread(thread);
@@ -238,7 +236,6 @@ export function ChatMode() {
               disabled={inFlight}
             />
           )}
-          {/* Thread header — only visible once a conversation is underway. */}
           {hasThread && (
             <div
               className="mb-6 flex items-center justify-between gap-3"
@@ -283,7 +280,6 @@ export function ChatMode() {
             </div>
           )}
 
-          {/* Render completed thread turns. */}
           {thread.map((turn, i) => (
             <article key={i} className={i === 0 ? "" : "mt-12"}>
               <TurnQueryLine text={turn.query} index={i} />
@@ -297,7 +293,6 @@ export function ChatMode() {
             </article>
           ))}
 
-          {/* In-flight user query + streaming surfaces. */}
           {inFlight && currentQueryRef.current && (
             <article className={hasThread ? "mt-12" : "mt-6"}>
               <TurnQueryLine
@@ -455,8 +450,6 @@ function RestoredBanner({
   );
 }
 
-/** Compact "Q{n}" chip + query text — rendered above every turn's answer
- *  so the conversation reads top-to-bottom like a transcript. */
 function TurnQueryLine({
   text,
   index,

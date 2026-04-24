@@ -66,7 +66,6 @@ def test_upsert_replaces_existing_rows_for_same_doc(
     updated = _make_chunk(page=1, text="versi baru")
 
     store.upsert([StoredChunk(chunk=original, vector=embedder.embed([original.text])[0])])
-    # Re-upsert same (doc_id, page, section_slug) with new text — should replace
     store.upsert([StoredChunk(chunk=updated, vector=embedder.embed([updated.text])[0])])
 
     chunks = list(store.iter_chunks())
@@ -106,7 +105,6 @@ def test_vector_search_returns_nearest_first(
     hits = store.search_vector(query_vec, k=3)
 
     assert len(hits) == 3
-    # Exact query match should be the top hit
     assert hits[0].doc_id == "a"
 
 

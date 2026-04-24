@@ -73,7 +73,6 @@ export function buildAnswerMarkdown(query: string, final: FinalResponse): string
         );
         const quote = (c.chunk_text ?? "").replace(/\s+/g, " ").trim();
         if (quote) {
-          // Break long quotes across multiple `>` lines for readability.
           lines.push(`> ${quote.slice(0, 420)}${quote.length > 420 ? "…" : ""}`);
         }
         lines.push("");
@@ -180,9 +179,7 @@ export function buildShareText(query: string, final: FinalResponse): string {
         const n = indexByKey.get(key);
         return n ? `[${n}]` : "";
       })
-      // Strip markdown headings, keep the text.
       .replace(/^#{1,6}\s+/gm, "")
-      // Collapse sequences of blank lines.
       .replace(/\n{3,}/g, "\n\n")
       .trim();
 

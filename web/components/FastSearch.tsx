@@ -75,7 +75,6 @@ export function FastSearch({ onOpenPdf, onEscalate }: Props) {
     }
   }, []);
 
-  // Debounce search as the user types.
   useEffect(() => {
     if (debounceRef.current) window.clearTimeout(debounceRef.current);
     debounceRef.current = window.setTimeout(() => {

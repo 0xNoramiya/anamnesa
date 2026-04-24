@@ -15,7 +15,6 @@ from __future__ import annotations
 import os
 import sys
 import time
-from pathlib import Path
 
 from dotenv import load_dotenv
 
@@ -141,7 +140,7 @@ async def main():
 
         final = stream.get_final_message()
         total = time.perf_counter() - t0
-        print(f"\n\n--- done ---")
+        print("\n\n--- done ---")
         print(f"total wall:      {total:.1f}s")
         if first_char_at:
             print(f"first content:   {first_char_at:.1f}s")

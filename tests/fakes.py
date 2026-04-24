@@ -29,10 +29,6 @@ from core.state import (
     VerificationResult,
 )
 
-# ---------------------------------------------------------------------------
-# Canned builders
-# ---------------------------------------------------------------------------
-
 
 def make_normalized(text: str = "DBD derajat II pediatrik tatalaksana") -> NormalizedQuery:
     return NormalizedQuery(
@@ -76,11 +72,6 @@ def make_draft_answer() -> DraftAnswer:
         claims=[claim],
         citations=[cite],
     )
-
-
-# ---------------------------------------------------------------------------
-# Fakes
-# ---------------------------------------------------------------------------
 
 
 class FakeNormalizer:
@@ -164,11 +155,6 @@ class FakeVerifier:
         out = self.script[self.calls]
         self.calls += 1
         return out
-
-
-# ---------------------------------------------------------------------------
-# Drafter/Verifier result builders
-# ---------------------------------------------------------------------------
 
 
 def drafter_answer() -> DrafterAnswerDecision:

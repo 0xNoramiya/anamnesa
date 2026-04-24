@@ -20,16 +20,11 @@ from core.embeddings import (
     build_embedder,
 )
 
-# ---------------------------------------------------------------------------
-# HashEmbedder regression — existing behavior still works.
-# ---------------------------------------------------------------------------
-
 
 def test_hash_embedder_returns_normalized_vector_of_configured_dim() -> None:
     e = HashEmbedder(dim=64)
     [vec] = e.embed(["halo dunia"])
     assert len(vec) == 64
-    # Should be L2-normalized.
     norm = sum(v * v for v in vec) ** 0.5
     assert abs(norm - 1.0) < 1e-6
 
@@ -39,11 +34,6 @@ def test_hash_embedder_deterministic_across_calls() -> None:
     a = e.embed(["DBD anak derajat 2"])[0]
     b = e.embed(["DBD anak derajat 2"])[0]
     assert a == b
-
-
-# ---------------------------------------------------------------------------
-# BGEEmbedder — lazy load, shape, prefix, batch
-# ---------------------------------------------------------------------------
 
 
 class _FakeSentenceTransformer:
@@ -129,7 +119,7 @@ def test_bge_embedder_embed_does_not_prepend_query_prefix(
     e.embed(["dengue"])
     assert e._model is not None
     call = e._model.encode_calls[-1]
-    assert call["texts"] == ["dengue"]  # NO prefix
+    assert call["texts"] == ["dengue"]
 
 
 def test_bge_embedder_embed_queries_prepends_query_prefix(
@@ -169,7 +159,7 @@ def test_bge_embedder_missing_dep_raises_with_install_hint(
         )
 
     monkeypatch.setattr(emb_mod, "_load_sentence_transformer_cls", _raise)
-    e = BGEEmbedder()  # construction is still cheap/lazy
+    e = BGEEmbedder()
     with pytest.raises(EmbedderUnavailableError) as excinfo:
         e.embed(["x"])
     msg = str(excinfo.value)
@@ -181,11 +171,6 @@ def test_bge_embedder_dim_is_1024_without_load() -> None:
     e = BGEEmbedder()
     assert e.dim == 1024
     assert e._model is None  # dim access must not trigger load
-
-
-# ---------------------------------------------------------------------------
-# build_embedder factory
-# ---------------------------------------------------------------------------
 
 
 def test_build_embedder_hash() -> None:

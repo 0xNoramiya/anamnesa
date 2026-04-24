@@ -15,10 +15,6 @@ from ulid import ULID
 from core.refusals import RefusalReason
 from core.trace import TraceEvent
 
-# ---------------------------------------------------------------------------
-# Source-level metadata
-# ---------------------------------------------------------------------------
-
 SourceType = Literal[
     "ppk_fktp",          # Pedoman Praktik Klinis FKTP (Kepmenkes 514/2015)
     "pnpk",              # Pedoman Nasional Pelayanan Kedokteran
@@ -29,11 +25,11 @@ SourceType = Literal[
 ]
 
 CurrencyStatus = Literal[
-    "current",           # no newer guideline from same authority on same topic
-    "superseded",        # newer guideline exists
-    "aging",             # >5 years old, no newer version found
-    "unknown",           # supersession graph couldn't resolve
-    "withdrawn",         # actively retracted
+    "current",
+    "superseded",
+    "aging",
+    "unknown",
+    "withdrawn",
 ]
 
 Intent = Literal[
@@ -55,11 +51,6 @@ PatientContext = Literal[
 ]
 
 
-# ---------------------------------------------------------------------------
-# Normalizer output
-# ---------------------------------------------------------------------------
-
-
 class NormalizedQuery(BaseModel):
     """Structured restatement of the user's Bahasa query."""
 
@@ -72,11 +63,6 @@ class NormalizedQuery(BaseModel):
     keywords_id: list[str] = Field(default_factory=list)
     keywords_en: list[str] = Field(default_factory=list)
     red_flags: list[str] = Field(default_factory=list)
-
-
-# ---------------------------------------------------------------------------
-# Retrieval
-# ---------------------------------------------------------------------------
 
 
 class RetrievalFilters(BaseModel):
@@ -116,26 +102,21 @@ class RetrievalAttempt(BaseModel):
     drafter_feedback: str | None = None
 
 
-# ---------------------------------------------------------------------------
-# Drafter output (discriminated union)
-# ---------------------------------------------------------------------------
-
-
 class Citation(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    key: str                       # e.g. "PPK-FKTP-2015:p412:dbd_tata_laksana"
+    key: str  # e.g. "PPK-FKTP-2015:p412:dbd_tata_laksana"
     doc_id: str
     page: int
     section_slug: str
-    chunk_text: str                # the grounding text (verbatim Bahasa)
+    chunk_text: str
 
 
 class Claim(BaseModel):
     model_config = ConfigDict(frozen=True)
 
-    claim_id: str                  # e.g. "c1"
-    text: str                      # Bahasa claim text
+    claim_id: str
+    text: str
     citation_keys: list[str]
 
 
@@ -144,7 +125,7 @@ class DraftAnswer(BaseModel):
 
     model_config = ConfigDict(frozen=True)
 
-    content: str                   # Bahasa draft, contains inline [[key]]
+    content: str  # Bahasa draft, contains inline [[key]]
     claims: list[Claim]
     citations: list[Citation]
 
@@ -159,7 +140,7 @@ class DrafterNeedMoreRetrieval(BaseModel):
     model_config = ConfigDict(frozen=True)
     decision: Literal["need_more_retrieval"] = "need_more_retrieval"
     filter_hints: RetrievalFilters
-    feedback: str = ""             # why the Drafter wants another pass
+    feedback: str = ""
 
 
 class DrafterRefuse(BaseModel):
@@ -172,11 +153,6 @@ DrafterResult = Annotated[
     DrafterAnswerDecision | DrafterNeedMoreRetrieval | DrafterRefuse,
     Field(discriminator="decision"),
 ]
-
-
-# ---------------------------------------------------------------------------
-# Verifier output
-# ---------------------------------------------------------------------------
 
 
 class CurrencyFlag(BaseModel):
@@ -204,16 +180,11 @@ class VerificationResult(BaseModel):
 
     verifications: list[ClaimVerification]
     currency_flags: list[CurrencyFlag] = Field(default_factory=list)
-    feedback_for_drafter: str | None = None  # non-null iff a retry is requested
+    feedback_for_drafter: str | None = None
 
     @property
     def has_unsupported(self) -> bool:
         return any(v.status == "unsupported" for v in self.verifications)
-
-
-# ---------------------------------------------------------------------------
-# Final response + cost ledger
-# ---------------------------------------------------------------------------
 
 
 class CostLedger(BaseModel):
@@ -242,12 +213,10 @@ class CostLedger(BaseModel):
 
 
 class RetrievalHint(BaseModel):
-    """A lightweight chunk summary surfaced on corpus-silent refusals.
+    """Lightweight chunk summary surfaced on corpus-silent refusals.
 
-    The user sees: "Anamnesa searched and found these documents, but none
-    were judged relevant to your question." This converts a dead-end
-    refusal into a useful pointer — the user can click through the PDF
-    of a near-miss guideline and make their own call.
+    Lets the user click through a near-miss guideline PDF even when the
+    orchestrator refused, rather than seeing a dead-end.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -256,33 +225,27 @@ class RetrievalHint(BaseModel):
     page: int
     section_slug: str
     section_path: str
-    text_preview: str              # first ~200 chars, whitespace-collapsed
+    text_preview: str
     year: int
     source_type: str
-    score: float                   # fusion score from the retriever
+    score: float
 
 
 class FinalResponse(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     query_id: str
-    answer_markdown: str           # Bahasa, with inline [[key]] citations
+    answer_markdown: str
     citations: list[Citation]
     currency_flags: list[CurrencyFlag]
     disclaimer_id: str = "anamnesa.disclaimer.v1"
-    refusal_reason: RefusalReason | None = None  # set iff this is a refusal
-    from_cache: bool = False       # True iff replayed from the answer cache
-    cached_age_s: float | None = None  # cache entry age at replay time
+    refusal_reason: RefusalReason | None = None
+    from_cache: bool = False
+    cached_age_s: float | None = None
+    # Populated only on "retrieval ran but refused" reasons (corpus_silent,
+    # all_superseded_no_current, citations_unverifiable). Successful answers
+    # keep grounding in `citations` instead.
     retrieval_preview: list[RetrievalHint] = Field(default_factory=list)
-    # Populated on "retrieval ran but refused" reasons (corpus_silent,
-    # all_superseded_no_current, citations_unverifiable). Empty on
-    # refusals that never ran retrieval (out_of_scope, patient_specific)
-    # and on successful answers (citations carry the grounding there).
-
-
-# ---------------------------------------------------------------------------
-# QueryState — the central shared object
-# ---------------------------------------------------------------------------
 
 
 def _new_query_id() -> str:
@@ -312,8 +275,6 @@ class QueryState(BaseModel):
 
     trace_events: list[TraceEvent] = Field(default_factory=list)
     cost: CostLedger = Field(default_factory=CostLedger)
-
-    # --- accumulator helpers (orchestrator uses these, not agents) ---
 
     def append_trace(self, event: TraceEvent) -> None:
         self.trace_events.append(event)

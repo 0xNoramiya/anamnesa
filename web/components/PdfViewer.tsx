@@ -19,7 +19,6 @@ interface Props {
 export function PdfViewer({ docId, page, onClose }: Props) {
   const [isMobile, setIsMobile] = useState(false);
 
-  // Close on Escape + body scroll lock.
   useEffect(() => {
     if (!docId) return;
     const onKey = (e: KeyboardEvent) => {

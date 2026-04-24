@@ -23,7 +23,6 @@ from typing import TYPE_CHECKING, Any, Protocol, runtime_checkable
 import structlog
 
 if TYPE_CHECKING:
-    # Type-only; never imported at runtime unless the user has the package.
     from sentence_transformers import SentenceTransformer
 
 log = structlog.get_logger("anamnesa.retrieval")
@@ -80,17 +79,11 @@ class HashEmbedder:
             # as aggressively as pure positive counts would.
             sign = 1.0 if h[4] & 0x01 else -1.0
             vec[bucket] += sign
-        # L2 normalize
         norm = sum(v * v for v in vec) ** 0.5
         if norm == 0.0:
             vec[0] = 1.0
             return vec
         return [v / norm for v in vec]
-
-
-# ---------------------------------------------------------------------------
-# BGEEmbedder — real multilingual embedder
-# ---------------------------------------------------------------------------
 
 
 class EmbedderUnavailableError(RuntimeError):
@@ -101,12 +94,7 @@ BGE_M3_DIMENSION = 1024
 
 
 def _load_sentence_transformer_cls() -> type[SentenceTransformer]:
-    """Import the SentenceTransformer class lazily.
-
-    Wrapped as a private factory so tests can monkeypatch one thing and so
-    the heavy `torch` stack only loads when BGEEmbedder.embed is actually
-    invoked — never at module import time.
-    """
+    """Import SentenceTransformer lazily so torch isn't pulled at module import."""
     try:
         from sentence_transformers import SentenceTransformer
     except ImportError as exc:
@@ -135,30 +123,17 @@ def _detect_device() -> str:
 class BGEEmbedder:
     """Real multilingual embedder — `BAAI/bge-m3` (1024-dim).
 
-    Design:
-      * `__init__` is cheap — does NOT load the model. `self._model` stays
-        `None` until the first `embed()` call. This keeps module imports
-        fast even when `sentence-transformers` isn't installed.
-      * `dim` is readable without loading (it's a known class constant).
-      * `embed()` batches through `model.encode(batch_size=...)`, with
-        `normalize_embeddings=True` (BGE-M3 is cosine-style).
-      * If the dep is missing, construction succeeds (lazy) but the first
-        `embed()` raises `EmbedderUnavailableError` with a clear install hint.
-
-    Note on query prefix: BGE-M3's model card recommends prepending
-    `"query: "` for queries to improve retrieval quality. That's a
-    separate method (`embed_queries`) so the existing `Embedder` protocol
-    remains unchanged for document ingestion.
+    Lazy: construction does not load the model; the first `embed()` call does.
+    Use `embed_queries()` for queries — BGE-M3 recommends a `"query: "` prefix
+    that shouldn't be applied to ingested documents.
     """
 
-    # Class-level for readability of the magic number.
     DEFAULT_MODEL_ID = "BAAI/bge-m3"
     DEFAULT_BATCH_SIZE = 32
-    # BGE-M3 supports up to 8192 tokens but attention is O(seq^2). Long-tail
-    # chunks (our PPK FKTP has sections up to 60K chars) blow batch cost by
-    # ~64x vs median chunks because batches pad to the longest input. 1024
-    # tokens captures the clinical signal (condition, drug, dose, population
-    # concentrate near section headers) and gives a ~30-60x speedup.
+    # BGE-M3 supports up to 8192 tokens but attention is O(seq^2), and batches
+    # pad to the longest input. PPK FKTP has 60K-char sections; capping at 1024
+    # keeps the clinical signal (condition, drug, dose concentrate near headers)
+    # and yields a ~30-60x speedup.
     DEFAULT_MAX_SEQ_LENGTH = 1024
     QUERY_PREFIX = "query: "
 
@@ -179,7 +154,7 @@ class BGEEmbedder:
 
     @property
     def dim(self) -> int:
-        # Avoid triggering a model load. BGE-M3 is 1024 by design.
+        # Hard-coded so reading `dim` does not force model load.
         return BGE_M3_DIMENSION
 
     @property
@@ -210,7 +185,6 @@ class BGEEmbedder:
         return self._model
 
     def embed(self, texts: list[str]) -> list[list[float]]:
-        """Embed document-mode texts. Returns a list of dense vectors."""
         return self._encode(texts)
 
     def embed_queries(self, texts: list[str]) -> list[list[float]]:
@@ -227,14 +201,7 @@ class BGEEmbedder:
             show_progress_bar=False,
             convert_to_numpy=True,
         )
-        # `vectors` is a 2-D numpy array. Convert to plain Python list-of-lists
-        # so downstream LanceDB / JSON serialization code doesn't need numpy.
         return [row.tolist() for row in vectors]
-
-
-# ---------------------------------------------------------------------------
-# Module-level helpers for scripts and tests
-# ---------------------------------------------------------------------------
 
 
 def build_embedder(name: str, **kwargs: Any) -> Embedder:
@@ -250,7 +217,6 @@ def build_embedder(name: str, **kwargs: Any) -> Embedder:
 
 
 if __name__ == "__main__":
-    # Tiny smoke test: `python -m core.embeddings hash`
     which = sys.argv[1] if len(sys.argv) > 1 else "hash"
     e = build_embedder(which)
     out = e.embed(["hello world"])

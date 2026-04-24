@@ -77,9 +77,9 @@ async def main() -> None:
     # One final drain — anything that landed between the last poll and now.
     for ev in state.trace_events:
         if ev.agent == "drafter" and ev.event_type == "text_delta":
-            pass  # already printed via the poller
+            pass
     total = time.perf_counter() - t0
-    print(f"\n\n--- done ---", file=sys.stderr)
+    print("\n\n--- done ---", file=sys.stderr)
     print(f"total wall:     {total:.1f}s", file=sys.stderr)
     if first_delta_at:
         print(f"first delta:    {first_delta_at:.1f}s", file=sys.stderr)

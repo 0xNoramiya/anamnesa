@@ -159,7 +159,6 @@ export function DrugLookup() {
 
   return (
     <div style={{ maxWidth: 980, margin: "0 auto", padding: "20px 20px 40px" }}>
-      {/* Source strip */}
       <div
         className="mono"
         style={{
@@ -173,7 +172,6 @@ export function DrugLookup() {
         {t("obat.source")}
       </div>
 
-      {/* Input */}
       <div
         style={{
           display: "flex",
@@ -225,7 +223,6 @@ export function DrugLookup() {
         )}
       </div>
 
-      {/* Examples (only when no active query) */}
       {!value && (
         <div style={{ marginTop: 14, display: "flex", flexWrap: "wrap", gap: 8 }}>
           <span
@@ -262,7 +259,6 @@ export function DrugLookup() {
         </div>
       )}
 
-      {/* Error */}
       {error && (
         <div
           style={{
@@ -279,7 +275,6 @@ export function DrugLookup() {
         </div>
       )}
 
-      {/* Transliteration banner */}
       {data && data.translit_used && (
         <div
           style={{
@@ -298,7 +293,6 @@ export function DrugLookup() {
         </div>
       )}
 
-      {/* Empty results */}
       {data && data.total_pages === 0 && !loading && (
         <div
           style={{
@@ -319,7 +313,6 @@ export function DrugLookup() {
         </div>
       )}
 
-      {/* Results header */}
       {data && data.total_pages > 0 && (
         <>
           <div
@@ -466,9 +459,6 @@ export function DrugLookup() {
         </>
       )}
 
-      {/* Cross-doc mentions — same drug name across PPK / PNPK / Pedoman.
-          Only rendered once the user has a non-empty query AND the
-          mentions fetch returned at least one hit. */}
       {mentions && mentions.total_pages > 0 && (
         <section style={{ marginTop: 36 }}>
           <div
@@ -518,7 +508,6 @@ export function DrugLookup() {
             {t("obat.mentions.caption")}
           </p>
 
-          {/* Per-doc aggregate chips — quick scan of which PPK/PNPK cover this drug. */}
           <div
             style={{
               display: "flex",
@@ -684,7 +673,6 @@ export function DrugLookup() {
         </section>
       )}
 
-      {/* Footnote */}
       <div
         style={{
           marginTop: 28,
@@ -742,10 +730,6 @@ function truncateTitle(title: string, max: number): string {
   return title.slice(0, max - 1).trimEnd() + "…";
 }
 
-/**
- * Wrap every occurrence of `term` (case-insensitive) with a <mark>.
- * Used to visually pin the matched drug name in each snippet.
- */
 function highlightTerm(text: string, term: string): React.ReactNode[] {
   if (!term) return [text];
   const lower = text.toLowerCase();

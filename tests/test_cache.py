@@ -26,11 +26,6 @@ from tests.fakes import (
 )
 
 
-# ---------------------------------------------------------------------------
-# cache_key canonicalization — raw user query
-# ---------------------------------------------------------------------------
-
-
 def test_cache_key_is_deterministic() -> None:
     q = "DBD anak derajat 2 tata laksana cairan awal"
     assert cache_key(q) == cache_key(q)
@@ -48,11 +43,6 @@ def test_cache_key_diverges_on_content() -> None:
     assert cache_key("TB paru") != cache_key("TB paru anak")
 
 
-# ---------------------------------------------------------------------------
-# cache_key_from_normalized — legacy helper still works
-# ---------------------------------------------------------------------------
-
-
 def test_cache_key_from_normalized_is_stable() -> None:
     nq = NormalizedQuery(
         structured_query="DBD derajat 2",
@@ -61,11 +51,6 @@ def test_cache_key_from_normalized_is_stable() -> None:
         condition_tags=["dbd"],
     )
     assert cache_key_from_normalized(nq) == cache_key_from_normalized(nq)
-
-
-# ---------------------------------------------------------------------------
-# AnswerCache — put/get/TTL
-# ---------------------------------------------------------------------------
 
 
 def _final(reason: RefusalReason | None = None) -> FinalResponse:
@@ -102,7 +87,6 @@ def test_ttl_expired_returns_none(tmp_path: Path) -> None:
     # ttl_seconds=0 means "anything older than 0s is stale" → immediate miss.
     time.sleep(0.01)
     assert cache.get("k1") is None
-    # Stale entry should be purged — put-after-miss works cleanly.
     assert cache.stats()["count"] == 0
 
 
@@ -128,11 +112,6 @@ def test_clear_wipes_entries(tmp_path: Path) -> None:
     removed = cache.clear()
     assert removed == 2
     assert cache.stats()["count"] == 0
-
-
-# ---------------------------------------------------------------------------
-# Orchestrator short-circuit
-# ---------------------------------------------------------------------------
 
 
 def _orch(cache, *, drafter_calls_expected: int) -> tuple[Orchestrator, FakeDrafter, FakeVerifier]:
@@ -164,8 +143,6 @@ async def test_second_identical_query_is_served_from_cache(tmp_path: Path) -> No
     assert drafter1.calls == 1
     assert verifier1.calls == 1
 
-    # Second call — byte-identical (modulo case/whitespace) raw query
-    # → cache hit, no Normalizer/Drafter/Verifier work.
     orch2, drafter2, verifier2 = _orch(cache, drafter_calls_expected=0)
     state2 = await orch2.run("  DBD   ANAK Derajat 2  ")
     assert state2.final_response is not None
@@ -174,7 +151,6 @@ async def test_second_identical_query_is_served_from_cache(tmp_path: Path) -> No
     assert drafter2.calls == 0
     assert verifier2.calls == 0
 
-    # cache_hit trace must be present.
     cache_hits = [e for e in state2.trace_events if e.event_type == "cache_hit"]
     assert len(cache_hits) == 1
 
@@ -187,7 +163,6 @@ async def test_cache_hit_skips_the_normalizer(tmp_path: Path) -> None:
     orch1, _, _ = _orch(cache, drafter_calls_expected=1)
     await orch1.run("TB paru dewasa rejimen OAT")
 
-    # Second orchestrator with a normalizer that would raise if called.
     class ExplodingNormalizer:
         calls = 0
 

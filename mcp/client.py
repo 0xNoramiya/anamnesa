@@ -58,8 +58,8 @@ class LocalRetriever:
             latency_ms=latency_ms,
         )
 
-    # Convenience passthroughs — same names as the MCP tools so agents and
-    # tests can share a single tool surface regardless of transport.
+    # Passthroughs with MCP-tool names so agents share one surface regardless
+    # of transport.
 
     def get_full_section(self, doc_id: str, section_path: str) -> dict[str, Any]:
         return self._r.get_full_section(doc_id, section_path)

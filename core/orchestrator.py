@@ -101,11 +101,9 @@ class Orchestrator:
         )
 
         try:
-            # Fast path: answer cache keyed on the raw user query. Lives
-            # BEFORE normalize so a hit skips every LLM call — Haiku too.
-            # Multi-turn queries skip the cache entirely — a follow-up
-            # like "dan kalau anak?" means something completely different
-            # depending on the preceding answer.
+            # Fast path: answer cache runs BEFORE normalize so a hit skips all
+            # LLM calls including Haiku. Multi-turn queries skip the cache —
+            # a follow-up like "dan kalau anak?" resolves against prior context.
             if prior_turn is None and self._try_serve_from_cache(state, started):
                 return state
 
@@ -129,8 +127,6 @@ class Orchestrator:
                 )
             )
             return self._finalize_refusal(state, budget, started)
-
-    # ------------------------------------------------------------------ stages
 
     async def _normalize(
         self,
@@ -188,18 +184,14 @@ class Orchestrator:
         next_filters = RetrievalFilters()
 
         while True:
-            # --- retrieval ---
             budget.charge_retrieval()
             attempt_num = budget.retrieval_attempts
             attempt = await self.retriever.search(
                 state.normalized_query, next_filters, attempt_num=attempt_num
             )
             state.append_retrieval(attempt)
-            # Include top-5 chunk previews so the UI can surface something
-            # concrete ~5s into a query (instead of making the user wait
-            # the full 120-180s for the Drafter + Verifier to finish).
-            # Text is trimmed to 220 chars and whitespace-collapsed to keep
-            # the SSE envelope small.
+            # Top-5 chunk previews surface on SSE ~5s in so the UI has something
+            # concrete before the Drafter + Verifier (120-180s) finishes.
             chunk_previews = []
             for chunk in attempt.chunks[:5]:
                 text = " ".join(chunk.text.split())
@@ -216,8 +208,6 @@ class Orchestrator:
                         "excerpt": text,
                     }
                 )
-            # Aggregate per-doc hit counts for a one-line "X docs · Y hits"
-            # label the UI can show while the Drafter is thinking.
             per_doc: dict[str, int] = {}
             for chunk in attempt.chunks:
                 per_doc[chunk.doc_id] = per_doc.get(chunk.doc_id, 0) + 1
@@ -240,13 +230,12 @@ class Orchestrator:
                 )
             )
 
-            # --- drafter ---
             budget.charge_drafter()
             t0 = time.monotonic()
             draft_result = await self.drafter.run(state, verifier_feedback=verifier_feedback)
             drafter_latency = int((time.monotonic() - t0) * 1000)
             self._charge_agent_usage(state, "drafter", self.drafter)
-            verifier_feedback = None  # consumed
+            verifier_feedback = None
 
             if isinstance(draft_result, DrafterNeedMoreRetrieval):
                 next_filters = draft_result.filter_hints
@@ -258,7 +247,7 @@ class Orchestrator:
                         latency_ms=drafter_latency,
                     )
                 )
-                continue  # loop; budget.charge_retrieval may now refuse.
+                continue
 
             if isinstance(draft_result, DrafterRefuse):
                 state.refusal_reason = draft_result.reason
@@ -272,7 +261,6 @@ class Orchestrator:
                 )
                 return
 
-            # DrafterAnswerDecision
             assert isinstance(draft_result, DrafterAnswerDecision)
             state.draft_answer = draft_result.answer
             state.append_trace(
@@ -287,7 +275,6 @@ class Orchestrator:
                 )
             )
 
-            # --- verifier ---
             budget.charge_verifier()
             t0 = time.monotonic()
             verification: VerificationResult = await self.verifier.run(state)
@@ -313,7 +300,7 @@ class Orchestrator:
             )
 
             if not verification.has_unsupported:
-                return  # success; outer method will finalize.
+                return
 
             if verifier_retries_left <= 0:
                 state.refusal_reason = RefusalReason.CITATIONS_UNVERIFIABLE
@@ -335,20 +322,11 @@ class Orchestrator:
                     payload={"retries_left": verifier_retries_left},
                 )
             )
-            # Loop back: no new retrieval necessary unless Drafter then asks
-            # for it. Reuse the last filters so retrieval is cheap.
-            # Intentionally continue to the top: the next iteration will
-            # consume another retrieval slot. This is a deliberate choice —
-            # re-running retrieval with identical filters is cheap relative
-            # to the LLM calls and keeps the loop structurally simple.
-
-    # ---------------------------------------------------------------- usage
 
     @staticmethod
     def _charge_agent_usage(state: QueryState, agent_name: str, agent: object) -> None:
-        """Read the agent's `last_usage` (populated after each run) and fold
-        it into `state.cost`. Tolerant of agents that don't expose this
-        attribute or leave it None (e.g. test fakes, early returns)."""
+        """Fold the agent's `last_usage` into `state.cost`. Tolerant of agents
+        without the attribute or with it unset (test fakes, early returns)."""
         usage = getattr(agent, "last_usage", None)
         if not usage:
             return
@@ -359,15 +337,13 @@ class Orchestrator:
             thinking_tokens=int(usage.get("thinking_tokens", 0) or 0),
         )
 
-    # -------------------------------------------------------------------- cache
-
     def _try_serve_from_cache(self, state: QueryState, started: float) -> bool:
-        """Look up the raw user query in the answer cache. Returns True
-        iff a hit was replayed into `state` (caller should return).
+        """Look up the raw user query in the answer cache.
 
-        Replay semantics: emit a `cache_hit` trace, then replay the cached
-        trace events verbatim (so the SSE stream looks identical to a live
-        run), rebind `query_id` / `from_cache` on the FinalResponse.
+        Returns True iff a hit was replayed into `state` (caller should return).
+        Replay semantics: emit `cache_hit`, replay the cached trace events
+        verbatim so SSE looks identical to a live run, then rebind `query_id`
+        / `from_cache` on the FinalResponse.
         """
         if self.cache is None:
             return False
@@ -391,12 +367,9 @@ class Orchestrator:
                 },
             )
         )
-        # Replay the cached trace events so the UI renders the full run
-        # shape (retriever → drafter → verifier) instead of an empty trace.
         for ev in hit.trace_events:
             state.append_trace(ev)
 
-        # Rebind query_id + cache markers onto the stored FinalResponse.
         state.final_response = hit.final_response.model_copy(
             update={
                 "query_id": state.query_id,
@@ -423,15 +396,16 @@ class Orchestrator:
         return True
 
     def _store_in_cache(self, state: QueryState) -> None:
-        """Persist a freshly-computed FinalResponse. Must be called AFTER
-        `final_response` is populated but BEFORE the cache_hit trace is
-        replayed — we only want live-run events in the stored payload."""
+        """Persist a freshly-computed FinalResponse.
+
+        Must be called AFTER `final_response` is populated but BEFORE any
+        cache_hit trace is replayed — only live-run events belong in storage.
+        """
         if self.cache is None:
             return
         if state.final_response is None:
             return
-        # Exclude the `query_completed` tail event — that gets regenerated
-        # on replay with fresh timing. Everything else is replay-safe.
+        # `query_completed` is regenerated on replay with fresh timing.
         replayable = [
             e
             for e in state.trace_events
@@ -440,11 +414,8 @@ class Orchestrator:
         try:
             self.cache.put(cache_key(state.original_query), state.final_response, replayable)
         except Exception as exc:
-            # Cache is best-effort — never break a successful query on a
-            # persistence failure.
+            # Cache is best-effort — a persistence failure must not fail the query.
             log.warning("cache.put_failed", error=str(exc), query_id=state.query_id)
-
-    # ------------------------------------------------------------------ finalize
 
     def _finalize_success(
         self, state: QueryState, budget: BudgetTracker, started: float
@@ -496,11 +467,6 @@ class Orchestrator:
         return state
 
 
-# ---------------------------------------------------------------------------
-# Assembly helpers
-# ---------------------------------------------------------------------------
-
-
 def _assemble_success(state: QueryState) -> FinalResponse:
     answer: DraftAnswer = state.draft_answer  # type: ignore[assignment]
     citations: list[Citation] = list(answer.citations)
@@ -513,11 +479,9 @@ def _assemble_success(state: QueryState) -> FinalResponse:
     )
 
 
-# Refusal reasons that ARE a result of the retriever+drafter finding no
-# grounded answer. Showing the near-miss chunks to the user is useful
-# here. Out-of-scope + patient-specific refusals never run retrieval so
-# there's nothing to show. Budget/verifier exhaustion can have chunks
-# but they're noisy — skip.
+# Refusals where the near-miss chunks are useful to show the user.
+# Out-of-scope / patient-specific refusals skip retrieval entirely; budget /
+# verifier exhaustion can have chunks but they're noisy.
 _PREVIEW_REFUSAL_REASONS = frozenset(
     {
         RefusalReason.CORPUS_SILENT,

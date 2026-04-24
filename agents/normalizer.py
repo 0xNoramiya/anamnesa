@@ -34,87 +34,60 @@ MAX_OUTPUT_TOKENS = 800
 PROMPT_PATH = Path(__file__).parent / "prompts" / "normalizer.md"
 
 
-# ---------------------------------------------------------------------------
-# Pre-LLM heuristic — catch obvious non-clinical queries without paying the
-# Haiku round-trip. Conservative by design: we only short-circuit queries
-# that are unambiguously not medical. Anything that COULD be clinical still
-# goes to Haiku.
-# ---------------------------------------------------------------------------
+# Pre-LLM heuristic: skip the Haiku round-trip for unambiguously non-clinical
+# queries. Conservative — a clinical query mis-classified as non-medical is
+# much worse than a non-medical one that goes through to Haiku. Only
+# short-circuits when a non-medical phrase matches AND zero clinical safety
+# tokens appear.
 
-# Whole-word / phrase hits that are unambiguously non-clinical. Keeping
-# the list deliberately short — each hit must be a true non-medical
-# signal in every realistic Indonesian context. Mixed with "_prefix" for
-# startswith checks to catch imperative openers.
 _NON_MEDICAL_PHRASES: tuple[str, ...] = (
-    # Greetings / chit-chat
     "apa kabar", "selamat pagi", "selamat siang", "selamat sore",
     "selamat malam", "terima kasih", "hi ", "hello ", "halo ",
-    # Jokes / entertainment
     "tell me a joke", "ceritakan lelucon", "tolong buat lelucon",
-    # Cooking / recipes (only as the subject — "resep" alone is clinical!)
+    # "resep" alone is clinical ("resep asam mefenamat"), so only match it
+    # bound to a specific dish.
     "resep nasi", "resep masakan", "resep kue", "resep soto",
     "resep ayam", "resep sambal", "resep mie", "resep rendang",
-    # Weather / geography
     "cuaca ", "suhu jakarta", "suhu bandung", "ibukota ",
     "capital of ", "what is the weather",
-    # Coding / software
     "write code", "write a function", "python function", "sql query",
     "regex untuk", "tulis kode", "buat script", "javascript code",
-    # Money / business
     "harga emas", "harga saham", "kurs dollar", "rate usd",
     "tips jualan", "cara dagang",
-    # Current events / news
     "presiden sekarang", "berita terbaru", "news today",
-    # Math / arithmetic (outside dosage calc context)
     "berapa 1+1", "berapa 2+2", "what is 2+2", "1 plus 1",
 )
 
-# Common medical tokens — if ANY appear in the query, we do NOT short-
-# circuit. Prevents false positives like "resep asam mefenamat" (a
-# prescription query that starts with "resep" but is clinical).
+# If any of these appears the query goes through to Haiku no matter what —
+# protects against false positives like "resep asam mefenamat".
 _CLINICAL_SAFETY_TOKENS: frozenset[str] = frozenset({
-    # Conditions
     "dbd", "demam", "dengue", "tb", "tuberkulosis", "hipertensi",
     "diabetes", "dm", "stroke", "infark", "asma", "ppok", "sepsis",
     "pneumonia", "ispa", "gagal", "jantung", "ginjal", "hepar",
     "covid", "hiv", "malaria", "tifoid", "cacar", "campak",
-    # Anatomy
-    "jantung", "paru", "ginjal", "hati", "lambung", "usus", "otak",
+    "paru", "hati", "lambung", "usus", "otak",
     "tulang", "sendi", "mata", "telinga", "hidung", "kulit",
-    # Drug stems
     "amoksisilin", "parasetamol", "ibuprofen", "metformin",
     "insulin", "oat", "rhze", "antibiotik", "analgetik", "nsaid",
     "kortikosteroid", "furosemid", "ramipril", "amlodipin",
     "mg/kg", "mg/kgbb", "mcg", "unit/kg", "dosis",
-    # Procedures
     "vtp", "rjp", "cpr", "iv", "im", "sc", "po", "pct",
-    # Populations / intents
     "pasien", "anak", "bayi", "balita", "neonatus", "ibu hamil",
     "hamil", "lansia", "geriatri",
-    "tata laksana", "tatalaksana", "tatalaksana", "diagnosis",
+    "tata laksana", "tatalaksana", "diagnosis",
     "rujukan", "tanda", "gejala", "sindrom", "keluhan",
 })
 
 
 def _is_obviously_non_medical(query: str) -> bool:
-    """Return True when the query is almost certainly not clinical.
-    Conservative: false negatives (clinical queries mis-classified as
-    non-medical) are MUCH worse than false positives (non-medical
-    queries that go through to Haiku), so when in doubt we return
-    False. Only when (a) a non-medical phrase hits AND (b) zero
-    clinical tokens appear do we short-circuit.
-    """
+    """Return True when the query is almost certainly not clinical."""
     text = query.lower().strip()
     if not text:
         return False
-    # Short-circuit trivially-empty / numeric-only queries.
     if text.isnumeric():
         return True
-    # Must hit a non-medical phrase...
-    hit = any(phrase in text for phrase in _NON_MEDICAL_PHRASES)
-    if not hit:
+    if not any(phrase in text for phrase in _NON_MEDICAL_PHRASES):
         return False
-    # ...AND have zero clinical safety tokens.
     for tok in _CLINICAL_SAFETY_TOKENS:
         if tok in text:
             return False
@@ -135,18 +108,12 @@ def _load_system_prompt() -> str:
 
 
 class _AnthropicLike(Protocol):
-    """Minimal shape of the Anthropic SDK client we depend on.
-
-    Tests inject a fake matching this shape; production code builds a
-    real `anthropic.Anthropic` via `_build_client`.
-    """
+    """Minimal shape of the Anthropic SDK client used by this agent."""
 
     messages: Any
 
 
 def _build_client(api_key: str) -> _AnthropicLike:
-    """Factory for the real Anthropic client. Local import to avoid
-    loading the SDK when tests inject a fake."""
     from anthropic import Anthropic
 
     return Anthropic(api_key=api_key)
@@ -155,10 +122,7 @@ def _build_client(api_key: str) -> _AnthropicLike:
 def _extract_text(response: Any) -> str:
     """Pick the first text block out of a Messages API response.
 
-    The Anthropic Messages API returns `content` as a list of blocks
-    (TextBlock, ToolUseBlock, etc.). The Normalizer asks for plain JSON
-    so we expect exactly one TextBlock. If the response shape is
-    unexpected, return empty string — caller will treat as malformed.
+    Returns empty string on unexpected shapes; caller treats as malformed.
     """
     content = getattr(response, "content", None)
     if not content:
@@ -167,7 +131,6 @@ def _extract_text(response: Any) -> str:
         text = getattr(block, "text", None)
         if isinstance(text, str):
             return text
-        # dict-shaped fakes
         if isinstance(block, dict) and block.get("type") == "text":
             return str(block.get("text", ""))
     return ""
@@ -177,7 +140,6 @@ def _parse_usage(response: Any, model_id: str) -> dict[str, Any]:
     usage = getattr(response, "usage", None)
     input_tokens = getattr(usage, "input_tokens", 0) if usage is not None else 0
     output_tokens = getattr(usage, "output_tokens", 0) if usage is not None else 0
-    # dict-shaped fakes
     if isinstance(usage, dict):
         input_tokens = int(usage.get("input_tokens", 0))
         output_tokens = int(usage.get("output_tokens", 0))
@@ -189,12 +151,9 @@ def _parse_usage(response: Any, model_id: str) -> dict[str, Any]:
 
 
 def _extract_first_json_object(text: str) -> str | None:
-    """Scan `text` for the first balanced {...} block and return it.
+    """Return the first balanced {...} block in `text`, or None.
 
-    Tolerates strings containing braces (and their escapes) so prose
-    like `He said "{foo}" then {...json...}` doesn't false-match on
-    the embedded brace pair. Returns None if no balanced object is
-    found.
+    String-aware so braces inside quoted strings don't false-match.
     """
     depth = 0
     start = -1
@@ -228,14 +187,14 @@ def _extract_first_json_object(text: str) -> str | None:
 def _parse_model_output(raw: str) -> NormalizerResult | None:
     """Parse the model's JSON text into a NormalizerResult.
 
-    Returns None if the payload is malformed — caller converts to a
-    `NORMALIZER_MALFORMED` refusal.
+    Returns None if the payload is malformed — caller converts to
+    `NORMALIZER_MALFORMED`.
     """
     raw = raw.strip()
     if not raw:
         return None
-    # Tolerate fenced code blocks ("```json\n{...}\n```") just in case,
-    # but don't bend over backwards — Haiku follows "JSON only" reliably.
+    # Tolerate fenced code blocks. Haiku follows "JSON only" reliably but
+    # occasionally wraps anyway.
     if raw.startswith("```"):
         raw = raw.strip("`")
         if raw.startswith("json"):
@@ -246,9 +205,7 @@ def _parse_model_output(raw: str) -> NormalizerResult | None:
     try:
         payload = json.loads(raw)
     except json.JSONDecodeError:
-        # Fallback: extract the first balanced {...} block from wrapping
-        # prose. Happens when Haiku narrates briefly before emitting JSON
-        # (e.g. on oddly-shaped meta queries like "Ringkaskan dokumen X").
+        # Fallback when Haiku narrates before emitting JSON.
         extracted = _extract_first_json_object(raw)
         if extracted is None:
             return None
@@ -291,12 +248,9 @@ def _parse_model_output(raw: str) -> NormalizerResult | None:
 class HaikuNormalizer:
     """Normalizer backed by Claude Haiku 4.5.
 
-    One shot per call. No retries. Output is a `NormalizedQuery` or a
-    `NormalizerRefusal`. Transport errors from the Anthropic client
-    propagate.
-
-    Tests inject a fake client via `anthropic_client=...`. In production
-    the client is built lazily from `api_key` via `_build_client`.
+    One shot per call, no retries. Output is `NormalizedQuery` or
+    `NormalizerRefusal`. Transport errors propagate. Tests inject a fake
+    client via `anthropic_client=`.
     """
 
     def __init__(
@@ -327,11 +281,8 @@ class HaikuNormalizer:
         user_query = state.original_query
         started = time.perf_counter()
 
-        # Pre-LLM fast-path: unambiguously non-medical queries skip the
-        # Haiku round-trip entirely and return a refusal in ~0ms. Only
-        # fires when we're confident — see _is_obviously_non_medical.
-        # Skip the heuristic when prior_turn is set: "dan kalau anak?"
-        # looks non-medical in isolation but is a valid follow-up.
+        # Skip Haiku for unambiguously non-medical queries. Skipped on
+        # follow-ups — "dan kalau anak?" looks non-medical in isolation.
         if prior_turn is None and _is_obviously_non_medical(user_query):
             log.info(
                 "normalizer.heuristic_refuse",
@@ -343,11 +294,8 @@ class HaikuNormalizer:
 
         user_message = _build_user_message(user_query, prior_turn)
 
-        # Anthropic's Python SDK `messages.create` is synchronous. We run
-        # inside an async agent Protocol but do not await — the SDK call
-        # blocks the loop briefly. Orchestrator treats Normalizer as a
-        # short, single-shot call so this is acceptable for the hackathon
-        # build. If latency becomes an issue, swap for `AsyncAnthropic`.
+        # SDK `messages.create` is synchronous; blocks the loop briefly.
+        # Acceptable because Normalizer is short and single-shot.
         response = self._client.messages.create(
             model=self.model_id,
             max_tokens=MAX_OUTPUT_TOKENS,
@@ -392,11 +340,9 @@ def _build_user_message(
 ) -> str:
     """Assemble the user-side message for Haiku.
 
-    Single-turn: just the raw query (unchanged from pre-multi-turn builds).
-    Multi-turn: prior Q/A as context, then the current follow-up, with an
-    explicit instruction to condense the follow-up into a standalone
-    clinical query. Haiku is smart enough to carry "anak" / "dewasa" /
-    "rawat jalan" hints from the prior answer into the structured query.
+    Multi-turn: inject prior Q/A and ask Haiku to condense the follow-up into a
+    standalone clinical query, preserving population / setting hints from the
+    prior answer.
     """
     if prior_turn is None:
         return user_query

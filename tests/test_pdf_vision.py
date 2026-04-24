@@ -27,11 +27,6 @@ from tools.pdf_vision import (
     route,
 )
 
-# ---------------------------------------------------------------------------
-# Synthetic PDF helpers
-# ---------------------------------------------------------------------------
-
-
 _TEXT_PAGE_CONTENT = (
     "Demam Berdarah Dengue (DBD) adalah penyakit yang disebabkan oleh virus dengue. "
     "Tanda dan gejala utama meliputi demam tinggi mendadak, nyeri kepala, nyeri "
@@ -52,7 +47,6 @@ def _build_synthetic_pdf(path: Path) -> None:
     """
     doc = fitz.open()
 
-    # Page 1: embedded selectable text.
     page1 = doc.new_page(width=595, height=842)  # A4
     rect = fitz.Rect(50, 50, 545, 792)
     page1.insert_textbox(rect, _TEXT_PAGE_CONTENT, fontsize=11, fontname="helv")
@@ -67,11 +61,6 @@ def _build_synthetic_pdf(path: Path) -> None:
 
     doc.save(str(path))
     doc.close()
-
-
-# ---------------------------------------------------------------------------
-# Fake Anthropic client — tests must not hit the network.
-# ---------------------------------------------------------------------------
 
 
 class _FakeMessage:
@@ -102,11 +91,6 @@ class _FakeAnthropic:
         self.messages = _FakeMessages(transcription)
 
 
-# ---------------------------------------------------------------------------
-# route()
-# ---------------------------------------------------------------------------
-
-
 def test_route_sends_text_page_to_text_and_scanned_page_to_vision(tmp_path: Path) -> None:
     pdf = tmp_path / "synthetic.pdf"
     _build_synthetic_pdf(pdf)
@@ -128,11 +112,6 @@ def test_route_threshold_lower_bound_treats_low_text_as_vision(tmp_path: Path) -
 
     assert plan.pages_for_text == []
     assert sorted(plan.pages_for_vision) == [1, 2]
-
-
-# ---------------------------------------------------------------------------
-# extract_text()
-# ---------------------------------------------------------------------------
 
 
 def test_extract_text_returns_embedded_text_for_text_page(tmp_path: Path) -> None:
@@ -165,11 +144,6 @@ def test_extract_text_returns_near_empty_for_scanned_page(tmp_path: Path) -> Non
     assert non_ws < 250
 
 
-# ---------------------------------------------------------------------------
-# extract() — merges text + vision paths with Anthropic seam patched
-# ---------------------------------------------------------------------------
-
-
 def test_extract_merges_text_and_vision_paths(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -194,25 +168,19 @@ def test_extract_merges_text_and_vision_paths(
     )
 
     assert isinstance(result, ExtractionResult)
-    # Both pages present, ordered.
     assert [p.page for p in result.pages] == [1, 2]
 
-    # Page 1 came from the text path.
     page1 = result.pages[0]
     assert page1.source == "text"
     assert "kristaloid" in page1.text
 
-    # Page 2 came from the vision path and contains the canned transcription.
     page2 = result.pages[1]
     assert page2.source == "vision"
     assert "kristaloid" in page2.text
     assert "vision" in page2.text.lower()
 
-    # Exactly one Anthropic call happened (one vision page).
     assert len(fake.messages.calls) == 1
     call = fake.messages.calls[0]
-    # Message payload should include an image block and a system prompt that
-    # preserves Bahasa.
     assert call["model"].startswith("claude-opus-4")
     assert "system" in call
     assert "Bahasa" in call["system"] or "bahasa" in call["system"].lower()
@@ -221,7 +189,6 @@ def test_extract_merges_text_and_vision_paths(
     assert "image" in types
     assert "text" in types
 
-    # Aggregate report fields are populated.
     report = result.report
     assert report.total_pages == 2
     assert report.text_pages == 1

@@ -230,10 +230,6 @@ function maybeRenderTable(
   );
 }
 
-/**
- * Tokenize a paragraph into text + inline markdown + citation markers.
- * Handles `[[doc_id:pN:section]]`, `**bold**`, and `*italic*` in one pass.
- */
 function jumpToReference(key: string, event?: React.MouseEvent) {
   if (typeof document === "undefined") return;
   // Let users cmd/ctrl-click to open in a new tab (native anchor behavior).

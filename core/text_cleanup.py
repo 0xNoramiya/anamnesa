@@ -45,17 +45,19 @@ _OCR_PAGE_FOOTER_RE = re.compile(r"^\s*-\s*\d+\s*-\s*$")
 _OCR_URL_FOOTER_RE = re.compile(r"^\s*(?:www\.)?[a-z]+\.kemkes\.go\.id\s*$", re.I)
 _OCR_LONE_CAP_RE = re.compile(r"^\s*[A-Z]\s*$")
 _OCR_MULTI_BLANK_RE = re.compile(r"\n{3,}")
-# Trailing/leading cap on an existing prose line: "BAB I E" → "BAB I",
-# "E Pada pasien" → "Pada pasien". Exclude I/V/X/L/C/D/M so roman
+# Trailing/leading cap: "BAB I E" → "BAB I". Excludes I/V/X/L/C/D/M so roman
 # numerals on legitimate section headers survive.
 _OCR_TRAILING_CAP_RE = re.compile(r" ([A-HJKN-UW-Z])$", re.M)
 _OCR_LEADING_CAP_RE = re.compile(r"^([A-HJKN-UW-Z]) ", re.M)
 
 
 def _fix_word_splice(s: str) -> str:
-    """Remove watermark-letter splices from Indonesian prose, skipping
-    medical abbreviations by requiring the containing alphabetic word
-    (no digits) to be ≥6 chars AND have exactly one uppercase letter."""
+    """Remove watermark-letter splices from Indonesian prose.
+
+    Skips medical abbreviations by requiring the containing alphabetic word
+    (digits treated as boundaries) to be ≥6 chars AND have exactly one
+    uppercase letter.
+    """
 
     def walk_word(start: int, end: int) -> tuple[int, int]:
         ws = start
@@ -87,9 +89,8 @@ def clean_guideline_text(s: str) -> str:
     s = _fix_word_splice(s)
     out: list[str] = []
     for line in s.splitlines():
-        # Trim dangling watermark letters first so a line like
-        # "-25- N" (footer + trailing watermark) gets trimmed to
-        # "-25-" and then caught by the footer drop-check below.
+        # Trim dangling watermark letters first so "-25- N" (footer + watermark)
+        # becomes "-25-" and is then caught by the footer drop-check below.
         for _ in range(3):
             new_line = _OCR_TRAILING_CAP_RE.sub("", line)
             new_line = _OCR_LEADING_CAP_RE.sub("", new_line)
@@ -108,12 +109,13 @@ def clean_guideline_text(s: str) -> str:
     return cleaned.strip()
 
 
-_ROMAN_NUMERALS = frozenset({"i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x", "xi", "xii"})
+_ROMAN_NUMERALS = frozenset(
+    {"i", "ii", "iii", "iv", "v", "vi", "vii", "viii", "ix", "x", "xi", "xii"}
+)
 _VOWELS = frozenset("aeiou")
-# 3-4 character medical acronyms with vowels that'd otherwise fall
-# through the all-consonant rule. Kept intentionally small — adding
-# too many risks false-positives against legitimate Indonesian words
-# ("anak", "obat"). Only well-known, unambiguous medical abbreviations.
+# Short medical acronyms with vowels that would otherwise miss the all-consonant
+# rule. Kept small — adding too many risks collisions with Indonesian words
+# ("anak", "obat").
 _MEDICAL_ACRONYMS = frozenset({
     "hiv", "aids", "tbc", "icu", "igd", "oat", "ppi", "nsaid", "ppk",
     "ppok", "dbd", "dss", "ska", "stemi", "nstemi",
@@ -121,12 +123,8 @@ _MEDICAL_ACRONYMS = frozenset({
 
 
 def _beautify_segment(seg: str) -> str:
-    """Title-case a single slug segment, upper-casing short acronyms
-    (all-consonant 2-5 char tokens: DBD, TB, PGK, VHC), roman
-    numerals (II, III, IV), and a short list of well-known medical
-    acronyms that happen to contain vowels (HIV, ICU, IGD, OAT).
-    Indonesian words — which almost always contain vowels — stay as
-    Title Case."""
+    """Title-case a slug segment; upper-case roman numerals, all-consonant 2-5
+    char tokens (DBD, TB, PGK), and listed medical acronyms (HIV, ICU, IGD)."""
     s = seg.strip()
     if not s:
         return ""
@@ -142,20 +140,16 @@ def _beautify_segment(seg: str) -> str:
 
 def beautify_slug(slug: str) -> str:
     """Turn a system slug 'latar-belakang' into 'Latar Belakang'.
-    Returns '' for junk slugs (single letter, or short fragments from
-    the same watermark-letter extraction bug) so the renderer can
-    skip emitting a header.
 
-    Short acronyms and roman numerals inside the slug are upper-cased
-    rather than title-cased, so "dbd-anak" renders as "DBD Anak" and
-    "derajat-iv" as "Derajat IV"."""
+    Returns '' for junk slugs (single letter, or short fragments from the
+    watermark-letter extraction bug) so the renderer can skip emitting a header.
+    """
     s = slug.strip()
     if not s:
         return ""
     lo = s.lower()
-    # Standalone roman numerals (≤2 chars: "i", "v", "x") would
-    # otherwise be caught by the junk-filter below. Whitelist them so
-    # a slug like "ii" renders as "II", not empty.
+    # Whitelist standalone roman numerals (≤2 chars: "i", "v", "x") that would
+    # otherwise be dropped by the junk-filter below.
     if lo in _ROMAN_NUMERALS:
         return lo.upper()
     if len(s) <= 2 and "-" not in s and "_" not in s:

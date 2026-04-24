@@ -9,7 +9,7 @@
 
 from pathlib import Path
 
-from scripts.deploy_helper import ssh, run, upload_file
+from scripts.deploy_helper import run, ssh, upload_file
 
 REPO = Path("/home/kudaliar/hackathon/anamnesa")
 REMOTE = "/opt/anamnesa"
@@ -45,7 +45,6 @@ def main() -> None:
         run(c, "systemctl restart anamnesa-frontend")
         run(c, "sleep 3 && systemctl is-active anamnesa-frontend")
 
-        # Confirm cache DB gets created on next query; for now just boot log.
         run(
             c,
             "journalctl -u anamnesa-backend -n 6 --no-pager | grep -E 'boot|cache'",

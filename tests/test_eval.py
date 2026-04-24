@@ -25,16 +25,11 @@ from core.state import (
 from eval.queries import QUERIES, QueryExpectation
 from eval.run_eval import run_all, score_result
 
-# ---------------------------------------------------------------------------
-# Schema
-# ---------------------------------------------------------------------------
-
 
 def test_queries_parse_and_count_is_23() -> None:
     assert len(QUERIES) == 23
     ids = [q.id for q in QUERIES]
     assert len(set(ids)) == len(ids), "duplicate ids in QUERIES"
-    # All three categories represented.
     cats = {q.category for q in QUERIES}
     assert cats == {"grounded", "aging", "absent"}
 
@@ -44,11 +39,6 @@ def test_category_distribution() -> None:
     assert cats.count("grounded") == 17
     assert cats.count("aging") == 3
     assert cats.count("absent") == 3
-
-
-# ---------------------------------------------------------------------------
-# Dry-run end-to-end
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -75,11 +65,6 @@ async def test_dry_run_absent_category_produces_refusal() -> None:
         assert r["score"]["refusal_match"] is True
         assert r["score"]["citations_min"] is True  # min_citations = 0
         assert r["error"] is None
-
-
-# ---------------------------------------------------------------------------
-# Hallucinated-citation detector
-# ---------------------------------------------------------------------------
 
 
 def _synthetic_state(doc_id_in_citation: str) -> QueryState:
@@ -158,11 +143,6 @@ def test_scorer_keyword_match_ignores_citation_markers() -> None:
     assert sc.keyword_match is True
 
 
-# ---------------------------------------------------------------------------
-# Exception isolation
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.asyncio
 async def test_exception_in_orchestrator_isolated_per_query(monkeypatch: Any) -> None:
     """A single query blowing up must not abort other queries."""
@@ -188,11 +168,6 @@ async def test_exception_in_orchestrator_isolated_per_query(monkeypatch: Any) ->
     assert "boom on first" in errors[0]["error"]
     assert len(survivors) == 1
     assert survivors[0]["error"] is None
-
-
-# ---------------------------------------------------------------------------
-# Category filter
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio

@@ -38,10 +38,7 @@ from eval.queries import QUERIES, Category, EvalQuery, QueryExpectation
 log = structlog.get_logger("anamnesa.eval")
 
 
-# ---------------------------------------------------------------------------
-# Costs — rough, per the API pricing table
-# ---------------------------------------------------------------------------
-
+# Rough cost estimation — input tokens charged at full rate (no cached-read split).
 PRICES_PER_MTOK = {
     "haiku": {"in": 1.00, "out": 5.00},
     "opus": {"in": 5.00, "out": 25.00},
@@ -66,11 +63,6 @@ def _estimate_cost(cost_ledger: Any) -> float:
         + opus_out * PRICES_PER_MTOK["opus"]["out"]
     ) / 1_000_000
     return round(cost, 4)
-
-
-# ---------------------------------------------------------------------------
-# Scoring
-# ---------------------------------------------------------------------------
 
 
 @dataclass(frozen=True)
@@ -126,20 +118,16 @@ def score_result(
     fr = state.final_response
     actual_refusal = state.refusal_reason
 
-    # 1. refusal match
     refusal_match = actual_refusal == expectation.refusal_reason
 
-    # 2. citations_min
     num_cites = len(fr.citations) if fr else 0
     citations_min = num_cites >= expectation.min_citations
 
-    # 3. source_type_match
     source_type_match: bool | None
     if expectation.expected_source_types is not None:
         if fr is None or not fr.citations:
             source_type_match = False
         else:
-            # Resolve each citation's doc_id → source_type via manifest.
             source_type_match = any(
                 _doc_source_type(c.doc_id) in expectation.expected_source_types
                 for c in fr.citations
@@ -147,7 +135,6 @@ def score_result(
     else:
         source_type_match = None
 
-    # 4. doc_id_match
     doc_id_match: bool | None
     if expectation.expected_doc_ids_any_of is not None:
         if fr is None or not fr.citations:
@@ -158,7 +145,6 @@ def score_result(
     else:
         doc_id_match = None
 
-    # 5. currency_match
     currency_match: bool | None
     if expectation.currency_must_include is not None:
         if fr is None or not fr.currency_flags:
@@ -170,7 +156,6 @@ def score_result(
     else:
         currency_match = None
 
-    # 6. keyword_match
     keyword_match: bool | None
     if expectation.must_contain_keywords:
         if fr is None:
@@ -183,7 +168,6 @@ def score_result(
     else:
         keyword_match = None
 
-    # 7. no_hallucinated_citations (the critical one)
     no_hallucinated = not _citations_hallucinated(state, manifest_doc_ids)
 
     return Score(
@@ -196,10 +180,6 @@ def score_result(
         no_hallucinated_citations=no_hallucinated,
     )
 
-
-# ---------------------------------------------------------------------------
-# Manifest lookups
-# ---------------------------------------------------------------------------
 
 _MANIFEST_CACHE: dict[str, tuple[set[str], dict[str, str]]] = {}
 
@@ -224,11 +204,6 @@ def _manifest_doc_ids_and_types() -> tuple[set[str], dict[str, str]]:
 def _doc_source_type(doc_id: str) -> str:
     _, types = _manifest_doc_ids_and_types()
     return types.get(doc_id, "unknown")
-
-
-# ---------------------------------------------------------------------------
-# Orchestrator wiring
-# ---------------------------------------------------------------------------
 
 
 def _build_live_orchestrator() -> Orchestrator:
@@ -297,11 +272,6 @@ def _build_dry_run_orchestrator(query: EvalQuery) -> Orchestrator:
         verifier=verifier,
         limits=BudgetLimits(),
     )
-
-
-# ---------------------------------------------------------------------------
-# Runner
-# ---------------------------------------------------------------------------
 
 
 async def run_one(
@@ -414,11 +384,6 @@ async def run_all(
     return await asyncio.gather(*(_guarded(q) for q in queries))
 
 
-# ---------------------------------------------------------------------------
-# Output formatting
-# ---------------------------------------------------------------------------
-
-
 def summarize_markdown(results: list[dict[str, Any]], started_at: datetime) -> str:
     total = len(results)
     passed = sum(1 for r in results if r["score"]["overall_pass"])
@@ -478,11 +443,6 @@ def summarize_markdown(results: list[dict[str, Any]], started_at: datetime) -> s
             f"{ms} | {cost:.3f} | {notes_str} |"
         )
     return "\n".join(lines) + "\n"
-
-
-# ---------------------------------------------------------------------------
-# CLI
-# ---------------------------------------------------------------------------
 
 
 def _cli(argv: list[str] | None = None) -> int:

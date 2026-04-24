@@ -53,6 +53,18 @@ target-version = "py312"
 select = ["E", "F", "I", "B", "UP", "N", "A", "ASYNC", "RUF"]
 ignore = []
 
+[tool.ruff.lint.per-file-ignores]
+# Deploy / bench / probe scripts intentionally do:
+#   1. load_dotenv() before importing heavyweight modules that read env
+#      (ANTHROPIC_API_KEY, ANAMNESA_EMBEDDER, etc.) at import time → E402;
+#   2. emit long curl / shell-quoted payloads that'd be worse folded → E501.
+# These patterns aren't bugs — suppress at the directory level.
+"scripts/*.py" = ["E402", "E501"]
+# Video narration scripts contain complete sentences as string literals
+# (for ElevenLabs TTS). Folding them onto multiple lines hurts readability
+# and makes it harder to see what the voice actually reads.
+"video/*.py" = ["E501"]
+
 [tool.mypy]
 python_version = "3.12"
 strict = true

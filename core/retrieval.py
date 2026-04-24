@@ -34,12 +34,11 @@ from typing import Any
 import structlog
 from rank_bm25 import BM25Okapi
 
-from core.text_cleanup import clean_guideline_text
-
 from core.chunk_store import LanceChunkStore
 from core.embeddings import Embedder
 from core.manifest import Manifest
 from core.state import Chunk, NormalizedQuery, RetrievalFilters, SourceType
+from core.text_cleanup import clean_guideline_text
 
 log = structlog.get_logger("anamnesa.retrieval")
 
@@ -60,11 +59,7 @@ def _manifest_path_from_env() -> Path:
 
 
 def _tokenize(text: str) -> list[str]:
-    """Shared tokenizer for BM25. Keep in sync with `embeddings._tokenize`.
-
-    BM25 does not need stemming for the hackathon corpus; strings are short
-    and domain-specific. We simply lowercase and split on non-word chars.
-    """
+    """Shared tokenizer for BM25. Keep in sync with `embeddings._tokenize`."""
     import re
 
     return [t.lower() for t in re.findall(r"[A-Za-z0-9\u00C0-\u024F]+", text, re.UNICODE)]
@@ -76,9 +71,11 @@ def _chunk_key(c: Chunk) -> str:
 
 
 def _clean_chunk(c: Chunk) -> Chunk:
-    """Return a copy of `c` with watermark/footer noise stripped from
-    its body text. Cheap pure function; run on every retrieval result
-    so the Drafter never sees raw PDF-extraction artifacts."""
+    """Strip watermark/footer noise from a chunk's body text.
+
+    Runs on every retrieval result so the Drafter never sees raw PDF
+    extraction artifacts.
+    """
     cleaned = clean_guideline_text(c.text)
     if cleaned == c.text:
         return c
@@ -107,12 +104,11 @@ def _chunk_matches_filters(chunk: Chunk, filters: RetrievalFilters) -> bool:
 
 
 def _where_clause(filters: RetrievalFilters) -> str | None:
-    """Push cheap filters down into LanceDB's SQL-like predicate layer.
+    """Push cheap filters down into LanceDB's predicate layer.
 
-    Only the cleanly-indexed filters (doc_id, source_type, year) are pushed
-    down; free-text filters (conditions, section_types) are applied in
-    Python so they can match against `section_path`/`section_slug`
-    substrings rather than exact equality.
+    Only cleanly-indexed filters (doc_id, source_type, year) push down; free-text
+    filters (conditions, section_types) apply in Python so they can substring-match
+    `section_path` / `section_slug`.
     """
     parts: list[str] = []
     if filters.doc_ids:
@@ -133,11 +129,7 @@ def _where_clause(filters: RetrievalFilters) -> str | None:
 
 
 class HybridRetriever:
-    """Vector + BM25 hybrid retriever with reciprocal-rank fusion.
-
-    One process, one store, one BM25 index. Safe to construct per-request;
-    BM25 load is O(file size) and LanceDB connection is cheap.
-    """
+    """Vector + BM25 hybrid retriever with reciprocal-rank fusion."""
 
     def __init__(
         self,
@@ -159,8 +151,6 @@ class HybridRetriever:
         self._bm25_chunks: list[Chunk] = []
         self._manifest_cache: Manifest | None = None
 
-    # -- BM25 ------------------------------------------------------------
-
     def rebuild_bm25_from_store(self) -> None:
         chunks = list(self.store.iter_chunks())
         self._bm25_chunks = chunks
@@ -174,7 +164,6 @@ class HybridRetriever:
         self.bm25_path.parent.mkdir(parents=True, exist_ok=True)
         payload = {
             "chunks": [c.model_dump() for c in self._bm25_chunks],
-            # BM25Okapi itself pickles cleanly.
             "bm25": self._bm25,
         }
         with self.bm25_path.open("wb") as fh:
@@ -200,7 +189,6 @@ class HybridRetriever:
         if not tokens:
             return []
         scores = self._bm25.get_scores(tokens)
-        # Rank by score desc
         order = sorted(
             range(len(scores)),
             key=lambda i: scores[i],
@@ -218,14 +206,10 @@ class HybridRetriever:
             )
         return out
 
-    # -- vector ----------------------------------------------------------
-
     def vector_search(
         self, query: str, k: int, *, where: str | None = None
     ) -> list[Chunk]:
-        # Prefer query-mode embedding when the embedder supports it
-        # (BGE-M3 recommends a "query: " prefix for queries). Falls back
-        # to `embed()` for embedders without the distinction (HashEmbedder).
+        # BGE-M3 recommends a "query: " prefix; HashEmbedder has no such method.
         encode_query = getattr(self.embedder, "embed_queries", None)
         if callable(encode_query):
             vec = encode_query([query])[0]
@@ -234,8 +218,6 @@ class HybridRetriever:
         hits = self.store.search_vector(vec, k, where=where)
         return [c.model_copy(update={"retrieval_method": "vector"}) for c in hits]
 
-    # -- hybrid fusion ---------------------------------------------------
-
     def search_guidelines(
         self, query: NormalizedQuery, filters: RetrievalFilters
     ) -> list[Chunk]:
@@ -243,7 +225,7 @@ class HybridRetriever:
 
         query_text = _compose_query_text(query)
         top_k = max(1, int(filters.top_k))
-        # Over-fetch per list so fusion has headroom and filters leave room.
+        # Over-fetch per list so fusion has headroom after python-level filtering.
         per_list_k = max(top_k * 3, 20)
 
         where = _where_clause(filters)
@@ -251,7 +233,6 @@ class HybridRetriever:
         vector_hits = self.vector_search(query_text, per_list_k, where=where)
         bm25_hits = self.bm25_search(query_text, per_list_k)
 
-        # Apply python-level filters uniformly
         vector_hits = [c for c in vector_hits if _chunk_matches_filters(c, filters)]
         bm25_hits = [c for c in bm25_hits if _chunk_matches_filters(c, filters)]
 
@@ -265,13 +246,7 @@ class HybridRetriever:
             fused=len(fused),
             filters=filters.model_dump(exclude_none=True),
         )
-        # Strip PDF-extraction noise (watermark splices, page footers)
-        # so the Drafter reads clean Indonesian prose. Raw BM25/vector
-        # scores are preserved; only the text body changes. See
-        # core/text_cleanup for the rule set and safety constraints.
         return [_clean_chunk(c) for c in fused[:top_k]]
-
-    # -- supporting tools ------------------------------------------------
 
     def get_full_section(self, doc_id: str, section_path: str) -> dict[str, Any]:
         """Return the stored text for the chunk whose section_path matches.
@@ -297,14 +272,12 @@ class HybridRetriever:
         origin = os.environ.get("ANAMNESA_PUBLIC_ORIGIN", "").strip()
         if origin:
             return f"{origin.rstrip('/')}/pdf/{doc_id}.pdf#page={page}"
-        # Local: point at the cached PDF when the manifest knows about it.
         manifest = self._load_manifest()
         if manifest is not None:
             for rec in manifest.documents:
                 if rec.doc_id == doc_id and rec.cache_path:
                     cache = Path(rec.cache_path).resolve()
                     return f"file://{cache}#page={page}"
-        # Fallback for chunks whose manifest entry has no cache_path.
         return f"file:///{doc_id}.pdf#page={page}"
 
     def check_supersession(self, doc_id: str) -> dict[str, Any]:
@@ -334,8 +307,6 @@ class HybridRetriever:
             }
         return {"status": "unknown", "superseding_doc_id": None, "source_year": 0}
 
-    # -- internals -------------------------------------------------------
-
     def _load_manifest(self) -> Manifest | None:
         if self._manifest_cache is not None:
             return self._manifest_cache
@@ -344,11 +315,6 @@ class HybridRetriever:
         raw = self.manifest_path.read_text(encoding="utf-8")
         self._manifest_cache = Manifest.model_validate_json(raw)
         return self._manifest_cache
-
-
-# ---------------------------------------------------------------------------
-# Fusion
-# ---------------------------------------------------------------------------
 
 
 def _compose_query_text(query: NormalizedQuery) -> str:
@@ -374,7 +340,7 @@ def _rrf_fuse(
     for ranked in ranked_lists:
         for rank, chunk in enumerate(ranked):
             key = _chunk_key(chunk)
-            scores[key] += 1.0 / (k_const + rank + 1)  # 1-based rank
+            scores[key] += 1.0 / (k_const + rank + 1)
             if key not in first_seen:
                 first_seen[key] = chunk
 
@@ -390,11 +356,6 @@ def _rrf_fuse(
     return out
 
 
-# ---------------------------------------------------------------------------
-# Wiring helpers
-# ---------------------------------------------------------------------------
-
-
 def default_retriever(
     *,
     embedder: Embedder | None = None,
@@ -405,10 +366,8 @@ def default_retriever(
 ) -> HybridRetriever:
     """Build a `HybridRetriever` from env defaults.
 
-    Used by the MCP server's `serve()` entrypoint and by scripts. The
-    embedder is selected by the `ANAMNESA_EMBEDDER` env var (`hash` or
-    `bge-m3`), defaulting to `hash` so test/dev environments without the
-    heavy `sentence-transformers` dep still work.
+    Embedder is selected by `ANAMNESA_EMBEDDER` (`hash` | `bge-m3`); defaults to
+    `hash` so dev environments without `sentence-transformers` still work.
     """
     from core.embeddings import build_embedder
 

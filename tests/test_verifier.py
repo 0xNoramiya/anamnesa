@@ -27,10 +27,6 @@ from core.state import (
 )
 from tests.fakes import make_chunk, make_draft_answer, make_normalized
 
-# ---------------------------------------------------------------------------
-# Fake Anthropic Messages API (mirrors test_drafter.py's seam)
-# ---------------------------------------------------------------------------
-
 
 @dataclass
 class _FakeTextBlock:
@@ -86,11 +82,6 @@ class FakeAnthropic:
     messages: _FakeMessages
 
 
-# ---------------------------------------------------------------------------
-# Fake Retriever with optional verifier-facing tools
-# ---------------------------------------------------------------------------
-
-
 class _FakeRetriever:
     """Minimal retriever — satisfies neither Retriever protocol method we
     rely on in Verifier, but exposes the two verifier-facing helpers the
@@ -133,11 +124,6 @@ class _MinimalRetriever:
     """
 
 
-# ---------------------------------------------------------------------------
-# Response builders
-# ---------------------------------------------------------------------------
-
-
 def _tool_use_response(
     *,
     tool_use_id: str,
@@ -166,11 +152,6 @@ def _text_response(text: str = "Hmm, still thinking.") -> _FakeResponse:
         usage=_FakeUsage(input_tokens=10, output_tokens=5),
         stop_reason="end_turn",
     )
-
-
-# ---------------------------------------------------------------------------
-# Canned submit_verification payloads
-# ---------------------------------------------------------------------------
 
 
 def _submit_all_supported() -> dict[str, Any]:
@@ -217,11 +198,6 @@ def _submit_one_unsupported() -> dict[str, Any]:
     }
 
 
-# ---------------------------------------------------------------------------
-# State builders
-# ---------------------------------------------------------------------------
-
-
 def _state_with_draft() -> QueryState:
     nq = make_normalized()
     state = QueryState(original_query="DBD anak derajat 2")
@@ -254,11 +230,6 @@ def _make_verifier(
     )
 
 
-# ---------------------------------------------------------------------------
-# 1. Happy path — one-shot submit with all `supported`.
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.asyncio
 async def test_happy_path_all_supported() -> None:
     client = FakeAnthropic(
@@ -288,7 +259,6 @@ async def test_happy_path_all_supported() -> None:
     assert flag.status == "aging"
     assert flag.source_year == 2015
 
-    # Single Anthropic call — tools registered correctly.
     assert len(client.messages.calls) == 1
     call = client.messages.calls[0]
     assert call["model"] == "claude-opus-4-7"
@@ -306,11 +276,6 @@ async def test_happy_path_all_supported() -> None:
     }
     # thinking_budget=0 → no thinking key
     assert "thinking" not in call
-
-
-# ---------------------------------------------------------------------------
-# 2. Unsupported claim → feedback_for_drafter non-null, names claim_id.
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -334,11 +299,6 @@ async def test_unsupported_claim_sets_feedback() -> None:
     assert result.feedback_for_drafter is not None
     assert "c1" in result.feedback_for_drafter
     assert result.verifications[0].status == "unsupported"
-
-
-# ---------------------------------------------------------------------------
-# 3. Tool-use loop: get_full_section → check_supersession → submit.
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -395,7 +355,6 @@ async def test_tool_use_loop_full_section_then_supersession_then_submit() -> Non
     ]
     assert retriever.supersession_calls == ["PPK-FKTP-2015"]
 
-    # Three Anthropic calls; each follow-up carries a tool_result.
     assert len(client.messages.calls) == 3
     second = client.messages.calls[1]
     last_msg = second["messages"][-1]
@@ -407,11 +366,6 @@ async def test_tool_use_loop_full_section_then_supersession_then_submit() -> Non
     third = client.messages.calls[2]
     last_msg = third["messages"][-1]
     assert last_msg["content"][0]["tool_use_id"] == "cs1"
-
-
-# ---------------------------------------------------------------------------
-# 4. Invariant coercion — unsupported claim but missing feedback.
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -452,13 +406,7 @@ async def test_invariant_coercion_synthesizes_missing_feedback() -> None:
 
     assert result.has_unsupported is True
     assert result.feedback_for_drafter is not None
-    # Synthesized feedback should reference claim_id.
     assert "c1" in result.feedback_for_drafter
-
-
-# ---------------------------------------------------------------------------
-# 5. End-turn without submit → fail-closed all_unsupported helper.
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -474,13 +422,7 @@ async def test_end_turn_without_submit_fails_closed() -> None:
     assert result.has_unsupported is True
     assert result.feedback_for_drafter is not None
     assert all(v.status == "unsupported" for v in result.verifications)
-    # One verification per claim in the draft.
     assert len(result.verifications) == len(state.draft_answer.claims)  # type: ignore[union-attr]
-
-
-# ---------------------------------------------------------------------------
-# 6. Loop cap exhausted → fail-closed.
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -515,11 +457,6 @@ async def test_loop_cap_exhausted_fails_closed() -> None:
     assert len(client.messages.calls) == 8
 
 
-# ---------------------------------------------------------------------------
-# 7. Malformed submit input → fail-closed via helper.
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.asyncio
 async def test_malformed_submit_input_fails_closed() -> None:
     bad_payload: dict[str, Any] = {
@@ -547,11 +484,6 @@ async def test_malformed_submit_input_fails_closed() -> None:
     assert all(v.status == "unsupported" for v in result.verifications)
 
 
-# ---------------------------------------------------------------------------
-# 8. Transport errors propagate (loud, not swallowed).
-# ---------------------------------------------------------------------------
-
-
 @pytest.mark.asyncio
 async def test_transport_error_propagates() -> None:
     client = FakeAnthropic(
@@ -561,11 +493,6 @@ async def test_transport_error_propagates() -> None:
 
     with pytest.raises(RuntimeError, match="connection reset"):
         await verifier.run(_state_with_draft())
-
-
-# ---------------------------------------------------------------------------
-# 9. last_usage populated after a call.
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -594,11 +521,6 @@ async def test_last_usage_populated() -> None:
     assert verifier.last_usage["output_tokens"] == 128
     assert verifier.last_usage["model_id"] == "claude-opus-4-7"
     assert verifier.last_usage["iterations"] == 1
-
-
-# ---------------------------------------------------------------------------
-# 10. Retriever without helpers → graceful fallback.
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -630,23 +552,12 @@ async def test_helper_tools_fallback_when_retriever_lacks_methods() -> None:
     result = await verifier.run(_state_with_draft())
 
     assert result.has_unsupported is False
-    # The helper branches were exercised without raising.
     assert len(client.messages.calls) == 3
-
-
-# ---------------------------------------------------------------------------
-# 11. Constructor guard.
-# ---------------------------------------------------------------------------
 
 
 def test_constructor_requires_either_client_or_api_key() -> None:
     with pytest.raises(ValueError, match="anthropic_client"):
         OpusVerifier(retriever=_FakeRetriever(), system_prompt="stub")
-
-
-# ---------------------------------------------------------------------------
-# 12. Thinking enabled when budget > 0.
-# ---------------------------------------------------------------------------
 
 
 @pytest.mark.asyncio
@@ -667,6 +578,5 @@ async def test_thinking_enabled_when_budget_positive() -> None:
     await verifier.run(_state_with_draft())
 
     call = client.messages.calls[0]
-    # Opus 4.7: adaptive thinking only; xhigh effort for agentic use.
     assert call["thinking"] == {"type": "adaptive"}
     assert call["output_config"] == {"effort": "xhigh"}

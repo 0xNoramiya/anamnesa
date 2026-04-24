@@ -34,11 +34,9 @@ from core.trace import TraceEvent
 
 log = structlog.get_logger("anamnesa.cache")
 
-DEFAULT_TTL_SECONDS = 86_400  # 24h
+DEFAULT_TTL_SECONDS = 86_400
 
-# Refusal reasons that are stable given the current corpus — safe to
-# cache. Everything else represents a transient state (budget, quality
-# failure, verifier retry) and must not be cached.
+# Stable refusals safe to cache. Transient failures must not be cached.
 _CACHEABLE_REFUSALS: frozenset[RefusalReason] = frozenset(
     {
         RefusalReason.CORPUS_SILENT,
@@ -52,21 +50,15 @@ _CACHEABLE_REFUSALS: frozenset[RefusalReason] = frozenset(
 def cache_key(query: str) -> str:
     """Canonical SHA-256 hash of a user query.
 
-    Whitespace-collapsed + lowercased. We key on the raw input rather
-    than the NormalizedQuery because the Haiku normalizer is stochastic:
-    back-to-back runs on byte-identical input produce different
-    `structured_query` phrasings, which would make cache hits effectively
-    impossible. Keying on the raw text guarantees deterministic hits on
-    re-asked questions and still benefits colloquial Bahasa because the
-    same phrasing usually recurs.
+    Keys on whitespace-collapsed, lowercased raw input rather than the
+    NormalizedQuery because the Haiku normalizer is stochastic: identical
+    input can produce different `structured_query` phrasings, defeating hits.
     """
     canon = " ".join(query.lower().split())
     return hashlib.sha256(canon.encode("utf-8")).hexdigest()[:16]
 
 
 def cache_key_from_normalized(nq: NormalizedQuery) -> str:
-    """Legacy helper kept for callers that only have the normalized
-    query. Not currently used by the orchestrator."""
     canon = "|".join(
         [
             " ".join(nq.structured_query.lower().split()),
@@ -79,7 +71,7 @@ def cache_key_from_normalized(nq: NormalizedQuery) -> str:
 
 
 class CachedAnswer:
-    __slots__ = ("final_response", "trace_events", "cached_at")
+    __slots__ = ("cached_at", "final_response", "trace_events")
 
     def __init__(
         self,
@@ -106,8 +98,8 @@ class AnswerCache:
         self.db_path = db_path
         self.ttl_seconds = ttl_seconds
         db_path.parent.mkdir(parents=True, exist_ok=True)
-        # check_same_thread=False: FastAPI runs handlers across threadpools.
-        # Serialize writes ourselves with a mutex.
+        # check_same_thread=False: FastAPI runs handlers across threadpools;
+        # writes are serialized via self._lock.
         self._conn = sqlite3.connect(str(db_path), check_same_thread=False)
         self._lock = threading.Lock()
         self._conn.execute(
@@ -131,7 +123,6 @@ class AnswerCache:
             return None
         payload_json, created_at = row
         if time.time() - float(created_at) > self.ttl_seconds:
-            # Stale — drop it so the next put replaces cleanly.
             self._delete(key)
             return None
         try:
@@ -150,7 +141,6 @@ class AnswerCache:
         final_response: FinalResponse,
         trace_events: list[TraceEvent],
     ) -> None:
-        # Skip uncacheable refusals.
         if (
             final_response.refusal_reason is not None
             and final_response.refusal_reason not in _CACHEABLE_REFUSALS
@@ -201,8 +191,8 @@ class AnswerCache:
 
 
 __all__ = [
+    "DEFAULT_TTL_SECONDS",
     "AnswerCache",
     "CachedAnswer",
-    "DEFAULT_TTL_SECONDS",
     "cache_key",
 ]

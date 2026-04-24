@@ -33,11 +33,6 @@ def _record(doc_id: str, **overrides: object) -> ManifestRecord:
     return ManifestRecord.model_validate(base)
 
 
-# ---------------------------------------------------------------------------
-# File-creation & insert
-# ---------------------------------------------------------------------------
-
-
 def test_missing_file_is_created_on_first_append(tmp_path: Path) -> None:
     manifest_path = tmp_path / "manifest.json"
     assert not manifest_path.exists()
@@ -59,11 +54,6 @@ def test_two_distinct_records_both_appear(tmp_path: Path) -> None:
     assert sorted(d.doc_id for d in loaded.documents) == ["pnpk-dengue-2020", "pnpk-tb-2019"]
 
 
-# ---------------------------------------------------------------------------
-# Upsert semantics
-# ---------------------------------------------------------------------------
-
-
 def test_duplicate_doc_id_upserts_rather_than_duplicates(tmp_path: Path) -> None:
     manifest_path = tmp_path / "manifest.json"
     append_record(_record("pnpk-dengue-2020", notes="first"), manifest_path)
@@ -74,11 +64,6 @@ def test_duplicate_doc_id_upserts_rather_than_duplicates(tmp_path: Path) -> None
     loaded = Manifest.model_validate_json(manifest_path.read_text(encoding="utf-8"))
     assert len(loaded.documents) == 1
     assert loaded.documents[0].notes == "second"
-
-
-# ---------------------------------------------------------------------------
-# Atomic write (no half-written file under failure)
-# ---------------------------------------------------------------------------
 
 
 def test_write_is_atomic_even_on_mid_write_interrupt(tmp_path: Path, monkeypatch) -> None:
@@ -109,11 +94,6 @@ def test_write_is_atomic_even_on_mid_write_interrupt(tmp_path: Path, monkeypatch
     assert leftover == [], f"unexpected leftover files: {leftover}"
 
 
-# ---------------------------------------------------------------------------
-# Parallel appends must not corrupt or lose records
-# ---------------------------------------------------------------------------
-
-
 def _append_worker(args: tuple[str, str]) -> AppendResult:
     from tools.manifest_append import append_record as ar  # reimport in subprocess
 
@@ -136,11 +116,6 @@ def test_parallel_appends_preserve_every_record(tmp_path: Path) -> None:
     assert sorted(d.doc_id for d in loaded.documents) == sorted(doc_ids)
 
 
-# ---------------------------------------------------------------------------
-# Output is pretty-printed with UTF-8 (Bahasa titles survive)
-# ---------------------------------------------------------------------------
-
-
 def test_bahasa_title_round_trips_without_ascii_escape(tmp_path: Path) -> None:
     manifest_path = tmp_path / "manifest.json"
     append_record(
@@ -153,11 +128,6 @@ def test_bahasa_title_round_trips_without_ascii_escape(tmp_path: Path) -> None:
     assert "\\u2014" not in raw
 
 
-# ---------------------------------------------------------------------------
-# Lockfile lives adjacent to manifest.json and does not leak into manifest
-# ---------------------------------------------------------------------------
-
-
 def test_lockfile_is_sibling_and_does_not_appear_in_manifest(tmp_path: Path) -> None:
     manifest_path = tmp_path / "manifest.json"
     append_record(_record("pnpk-dengue-2020"), manifest_path)
@@ -165,11 +135,6 @@ def test_lockfile_is_sibling_and_does_not_appear_in_manifest(tmp_path: Path) -> 
     # Lockfile is allowed (convention: manifest.json.lock); no other junk.
     siblings = sorted(p.name for p in tmp_path.iterdir())
     assert siblings == ["manifest.json", "manifest.json.lock"] or siblings == ["manifest.json"]
-
-
-# ---------------------------------------------------------------------------
-# CLI wrapper round-trip
-# ---------------------------------------------------------------------------
 
 
 def test_cli_json_input_appends_and_exits_zero(tmp_path: Path) -> None:
