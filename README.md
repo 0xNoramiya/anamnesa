@@ -9,6 +9,14 @@
 
 ---
 
+## The problem
+
+Indonesia's national clinical guidelines — the primary-care practice guidelines, the national clinical protocols, and the BPJS formulary — are published as long government PDFs. A primary-care clinician who needs to answer a specific clinical question in the middle of a consult often has only one option: open the PDF on a phone and search through hundreds of pages, sometimes with a patient still in the room. Commercial clinical-decision-support tools solve the interface problem, but they are English-only and do not cover Indonesian national guidelines or the national formulary.
+
+Anamnesa is the retrieval layer that workflow is missing — a typed Indonesian question, an Indonesian answer, and a citation to the exact page of the governing guideline.
+
+---
+
 ## How a query flows
 
 When a user asks a question, the orchestrator creates a single `QueryState` object that flows through the pipeline and accumulates everything the system learns along the way — the normalized query, each retrieval attempt, the draft answer, the verification result, the final trace, and the token-cost ledger. Every intermediate decision is recorded, which is what makes the answer reconstructible after the fact and what lets the UI stream reasoning live instead of showing a spinner.
@@ -179,6 +187,17 @@ The Next.js frontend talks to the FastAPI backend over REST for the read-only en
 The `core` package holds the orchestrator and the retrieval stack, with `state.py` defining every data type that flows through the pipeline. The `agents` package holds the three language-model-backed agents, their tool-use loops, and the system prompts that encode the trust contract. The `mcp` package exposes the retrieval layer as a FastMCP server with four tools, which is what the in-process agents call and what Claude Desktop / Claude Code see when the MCP server is wired up externally.
 
 For the full design specification — refusal states, exact budget guardrails, trace event shapes, Indonesian-language conventions — see [`CLAUDE.md`](./CLAUDE.md).
+
+---
+
+## Tech stack
+
+- **Frontend** — Next.js 14 (App Router), TypeScript, Tailwind CSS, shadcn/ui primitives, PDF.js for the in-app source viewer, native Server-Sent Events for streaming agent traces.
+- **Backend** — Python 3.12 on FastAPI + Uvicorn, Pydantic v2 schemas, structlog for JSON logs, sse-starlette for the streaming endpoints.
+- **Retrieval** — LanceDB vector store, BGE-M3 embeddings via sentence-transformers, rank-bm25 for the lexical half of hybrid search. CPU-capable at query time.
+- **Agents** — Anthropic Python SDK driving Haiku 4.5 (Normalizer) and Opus 4.7 (Drafter + Verifier). The retrieval tool boundary is a FastMCP server, so the same tools the in-process agents call are available to external clients like Claude Desktop and Claude Code.
+- **Storage** — SQLite for the 24-hour answer cache and the feedback store; a file-locked JSON manifest for the corpus catalog so multiple ingestion workers can append safely.
+- **Ingestion & tooling** — pdfplumber and PyMuPDF for text extraction, httpx + BeautifulSoup for the source crawlers, uv for dependency management, ruff + mypy for lint and type checks, pytest + pytest-asyncio for the 165-test suite.
 
 ---
 
